@@ -966,6 +966,42 @@ export class TaskboardDatabase {
       this.database.exec("ALTER TABLE cli_tools ADD COLUMN signed_in INTEGER");
     }
 
+    // Clean up stale execution locks. Locks must be released when a task
+    // reaches a terminal state; this migration removes locks that predate that
+    // behaviour (builder-*/reviewer-* role locks left on done/canceled/archived
+    // tasks, plus test-generated locks such as assigned-mismatch-*/autotest-*/
+    // guard-agent-*). Runs once on migration.
+    this.database.exec(`
+      DELETE FROM task_locks
+      WHERE task_id IN (
+        SELECT id FROM tasks
+        WHERE status IN ('done', 'canceled') OR archived_at IS NOT NULL
+      )
+    `);
+    this.database.exec(`
+      UPDATE tasks
+      SET lock_owner = NULL, lock_expires_at = NULL
+      WHERE (status IN ('done', 'canceled') OR archived_at IS NOT NULL)
+        AND lock_owner IS NOT NULL
+    `);
+    this.database.exec(`
+      DELETE FROM task_locks
+      WHERE owner LIKE 'builder-%'
+         OR owner LIKE 'reviewer-%'
+         OR owner LIKE 'assigned-mismatch%'
+         OR owner LIKE 'autotest-%'
+         OR owner LIKE 'guard-agent%'
+    `);
+    this.database.exec(`
+      UPDATE tasks
+      SET lock_owner = NULL, lock_expires_at = NULL
+      WHERE lock_owner LIKE 'builder-%'
+         OR lock_owner LIKE 'reviewer-%'
+         OR lock_owner LIKE 'assigned-mismatch%'
+         OR lock_owner LIKE 'autotest-%'
+         OR lock_owner LIKE 'guard-agent%'
+    `);
+
     const idempotencyColumns = this.database.prepare("PRAGMA table_info(idempotency_keys)").all();
     if (!idempotencyColumns.some((candidate) => candidate.name === "request_hash")) {
       this.database.exec("ALTER TABLE idempotency_keys ADD COLUMN request_hash TEXT");
@@ -2070,6 +2106,10 @@ export class TaskboardDatabase {
       if (result.changes !== 1) {
         this.#throwMissingOrConflict(id, version);
       }
+      const resolvedStatus = Object.hasOwn(changes, "status") ? changes.status : current.status;
+      if (resolvedStatus === "done" || resolvedStatus === "canceled") {
+        this.#releaseTaskLock(current.id);
+      }
       if (projectChanged) {
         this.database.prepare(`
           UPDATE projects SET updated_at = ? WHERE id IN (?, ?)
@@ -2134,6 +2174,9 @@ export class TaskboardDatabase {
       if (result.changes !== 1) {
         this.#throwMissingOrConflict(id, version);
       }
+      if (status === "done" || status === "canceled") {
+        this.#releaseTaskLock(current.id);
+      }
       this.#recordTaskActivity(
         current.id,
         actor,
@@ -2167,6 +2210,7 @@ export class TaskboardDatabase {
       if (result.changes !== 1) {
         this.#throwMissingOrConflict(id, version);
       }
+      this.#releaseTaskLock(current.id);
       this.#recordTaskActivity(
         current.id,
         actor,
@@ -3501,6 +3545,24 @@ export class TaskboardDatabase {
         actualVersion: task.version,
       });
     }
+  }
+
+  // Release an execution lock when a task reaches a terminal state (done /
+  // canceled / archived). Clears the tasks.lock_owner column and removes the
+  // task_locks row so locks do not accumulate and the task can be re-claimed.
+  #releaseTaskLock(taskId) {
+    const existing = this.database.prepare(`
+      SELECT * FROM task_locks WHERE task_id = ?
+    `).get(taskId);
+    if (!existing) return;
+    this.database.prepare(`
+      DELETE FROM task_locks WHERE task_id = ?
+    `).run(taskId);
+    this.database.prepare(`
+      UPDATE tasks
+      SET lock_owner = NULL, lock_expires_at = NULL, updated_at = ?
+      WHERE id = ? AND lock_owner IS NOT NULL
+    `).run(now(), taskId);
   }
 
   #requireCommentVersion(comment, expectedVersion) {

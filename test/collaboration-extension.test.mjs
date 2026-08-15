@@ -239,3 +239,66 @@ test("collaboration extension closes the local squad workflow loop", async () =>
   assert.ok(activity.body.activities.some((entry) => entry.eventType === "squad.autonomous_step"));
   assert.ok(activity.body.activities.some((entry) => entry.eventType === "agent.task_claimed"));
 });
+
+test("terminal task states release the execution lock", async () => {
+  const baseUrl = await startServer();
+  const agent = await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: ["frontend", "sqlite"], workspacePath: null },
+  });
+  assert.equal(agent.response.status, 201);
+
+  async function claimAndLock(title) {
+    const task = await request(baseUrl, "/api/tasks", {
+      method: "POST",
+      body: { projectId: "local", title, status: "todo", priority: "medium", labels: ["frontend"] },
+    });
+    const claim = await request(baseUrl, `/api/tasks/${task.body.task.id}/claim`, {
+      method: "POST",
+      body: { agentId: "builder", ownerSessionId: "session-lock", ttlSeconds: 900 },
+    });
+    assert.equal(claim.response.status, 200);
+    assert.equal(claim.body.task.lockOwner, "builder");
+    // Return the task id and its post-claim version.
+    return { id: task.body.task.id, version: claim.body.task.version };
+  }
+
+  // Move to done -> lock released.
+  const done = await claimAndLock("Lock release on done");
+  const doneMove = await request(baseUrl, `/api/tasks/${done.id}/move`, {
+    method: "POST",
+    body: { status: "done", version: done.version },
+  });
+  assert.equal(doneMove.response.status, 200);
+  assert.equal(doneMove.body.task.status, "done");
+  assert.equal(doneMove.body.task.lockOwner, null);
+  const doneTask = await request(baseUrl, `/api/tasks/${done.id}`);
+  assert.equal(doneTask.body.task.lockOwner, null);
+
+  // Canceled -> lock released.
+  const canceled = await claimAndLock("Lock release on cancel");
+  await request(baseUrl, `/api/tasks/${canceled.id}/move`, {
+    method: "POST",
+    body: { status: "canceled", version: canceled.version },
+  });
+  const canceledTask = await request(baseUrl, `/api/tasks/${canceled.id}`);
+  assert.equal(canceledTask.body.task.status, "canceled");
+  assert.equal(canceledTask.body.task.lockOwner, null);
+
+  // Archived -> lock released.
+  const archived = await claimAndLock("Lock release on archive");
+  const archivedResp = await request(baseUrl, `/api/tasks/${archived.id}/archive`, {
+    method: "POST",
+    body: { version: archived.version },
+  });
+  assert.equal(archivedResp.response.status, 200);
+  const archivedTask = await request(baseUrl, `/api/tasks/${archived.id}`);
+  assert.ok(archivedTask.body.task.archivedAt !== null);
+  assert.equal(archivedTask.body.task.lockOwner, null);
+
+  // A still-active in-progress task keeps its lock.
+  const active = await claimAndLock("Lock stays while active");
+  const activeTask = await request(baseUrl, `/api/tasks/${active.id}`);
+  assert.equal(activeTask.body.task.status, "in_progress");
+  assert.equal(activeTask.body.task.lockOwner, "builder");
+});
