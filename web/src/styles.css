@@ -1,85 +1,106 @@
 :root {
   color-scheme: light;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  font-family: "OpenAI Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --bg: #fcfcfd;
-  --header-bg: #fcfcfd;
-  --sidebar-bg: #f3f3f4;
+  --bg: #f6f6f6;
+  --header-bg: #f8f8f9;
+  --sidebar-bg: #f6f6f6;
   --surface: #ffffff;
   --surface-raised: #ffffff;
-  --surface-muted: #f3f3f4;
-  --surface-hover: #f6f6f7;
-  --surface-active: #ececed;
-  --column-header: #f8f8fa;
-  --text-primary: #1b1b1b;
-  --text-secondary: #5d5d5f;
-  --text-tertiary: #9e9ea1;
-  --text-quaternary: #b5b5b7;
-  --border: #e1e1e1;
-  --border-strong: #d5d5d5;
+  --surface-muted: #f6f6f6;
+  --surface-hover: rgba(26, 28, 31, 0.05);
+  --surface-active: rgba(26, 28, 31, 0.05);
+  --column-header: #f6f6f6;
+  --text-primary: #1a1c1f;
+  --text-secondary: rgba(26, 28, 31, 0.695);
+  --text-tertiary: rgba(26, 28, 31, 0.495);
+  --text-quaternary: rgba(26, 28, 31, 0.35);
+  --border: rgba(26, 28, 31, 0.078);
+  --border-strong: rgba(26, 28, 31, 0.117);
   --border-hairline: 0.5px;
-  --accent: #317cff;
-  --accent-hover: #3b84ff;
-  --accent-soft: rgba(49, 124, 255, 0.11);
-  --danger: #f34e52;
-  --danger-soft: #fff0f0;
-  --warning: #f0bf00;
-  --success: #43bc58;
-  --priority-urgent: #ff7236;
-  --priority-high: #ff7236;
-  --priority-medium: var(--warning);
-  --priority-low: var(--accent);
-  --priority-none: var(--text-tertiary);
-  --status-backlog: #9e9ea1;
-  --status-todo: #9e9ea1;
-  --status-progress: #f0bf00;
-  --status-review: #43bc58;
-  --status-blocked: #f34e52;
-  --status-done: #5e6ad2;
-  --status-canceled: #9e9ea1;
-  --scrollbar-thumb: rgba(27, 27, 27, 0.15);
-  --scrollbar-thumb-hover: rgba(27, 27, 27, 0.46);
-  --card-shadow: 0 3px 6px -2px rgba(0, 0, 0, 0.02), 0 1px 1px rgba(0, 0, 0, 0.04);
-  --dialog-shadow: 0 20px 50px rgba(0, 0, 0, 0.17), 0 2px 10px rgba(0, 0, 0, 0.08);
+  --accent: #339cff;
+  --accent-hover: #2e8fe0;
+  --accent-soft: rgba(51, 156, 255, 0.12);
+  --accent-2: #339cff;
+  --accent-3: #924ff7;
+  --danger: #e02e2a;
+  --danger-soft: rgba(224, 46, 42, 0.1);
+  --warning: #e25507;
+  --success: #00a240;
+  --priority-urgent: #e02e2a;
+  --priority-high: #e8930c;
+  --priority-medium: #c79a00;
+  --priority-low: #339cff;
+  --priority-none: #8a94a6;
+  --status-backlog: #6b7490;
+  --status-todo: #339cff;
+  --status-progress: #7555e8;
+  --status-review: #e8930c;
+  --status-blocked: #e02e2a;
+  --status-done: #00a240;
+  --status-canceled: #8a94a6;
+  --scrollbar-thumb: rgba(26, 28, 31, 0.14);
+  --scrollbar-thumb-hover: rgba(26, 28, 31, 0.38);
+  --card-shadow: 0 1px 2px rgba(26, 28, 31, 0.04);
+  --dialog-shadow: 0 16px 48px rgba(26, 28, 31, 0.14), 0 2px 8px rgba(26, 28, 31, 0.06);
+  --glow-accent: rgba(51, 156, 255, 0.35);
+  --glow-cyan: rgba(51, 156, 255, 0.35);
+  --glow-danger: rgba(224, 46, 42, 0.35);
+  --glow-success: rgba(0, 162, 64, 0.35);
+  --glow-amber: rgba(232, 147, 12, 0.35);
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #171719;
-  --header-bg: #1b1b1d;
-  --sidebar-bg: #151517;
-  --surface: #222225;
-  --surface-raised: #27272a;
-  --surface-muted: #29292c;
-  --surface-hover: #303034;
-  --surface-active: #37373c;
-  --column-header: #1d1d20;
-  --text-primary: #eeeeef;
-  --text-secondary: #b8b8bd;
-  --text-tertiary: #85858b;
-  --text-quaternary: #65656b;
-  --border: rgba(255, 255, 255, 0.075);
-  --border-strong: rgba(255, 255, 255, 0.13);
-  --accent: #317cff;
-  --accent-hover: #3f8aff;
-  --accent-soft: rgba(49, 124, 255, 0.16);
-  --danger: #ef686d;
-  --danger-soft: rgba(229, 72, 77, 0.12);
-  --warning: #e5b729;
-  --success: #53b98a;
-  --status-backlog: #74767b;
-  --status-todo: #999ba1;
-  --status-progress: #e4b50f;
-  --status-review: #53b98a;
-  --status-blocked: #ef686d;
-  --status-done: #6e78df;
-  --status-canceled: #85858b;
-  --scrollbar-thumb: rgba(238, 238, 239, 0.15);
-  --scrollbar-thumb-hover: rgba(238, 238, 239, 0.5);
-  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-  --dialog-shadow: 0 24px 64px rgba(0, 0, 0, 0.58), 0 2px 12px rgba(0, 0, 0, 0.4);
+  --bg: #1a1c1f;
+  --header-bg: #1e2125;
+  --sidebar-bg: #1a1c1f;
+  --surface: #23262b;
+  --surface-raised: #26292f;
+  --surface-muted: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --surface-active: rgba(255, 255, 255, 0.09);
+  --column-header: #202328;
+  --text-primary: #ffffff;
+  --text-secondary: #a9adb8;
+  --text-tertiary: #6f7480;
+  --text-quaternary: #52565f;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --accent: #339cff;
+  --accent-hover: #4db2ff;
+  --accent-soft: rgba(51, 156, 255, 0.16);
+  --accent-2: #339cff;
+  --accent-3: #924ff7;
+  --danger: #ff5f5a;
+  --danger-soft: rgba(255, 95, 90, 0.13);
+  --warning: #ffb454;
+  --success: #3dd68c;
+  --priority-urgent: #ff5f5a;
+  --priority-high: #ffb454;
+  --priority-medium: #f2d878;
+  --priority-low: #4db2ff;
+  --priority-none: #6f7480;
+  --status-backlog: #77829f;
+  --status-todo: #4db2ff;
+  --status-progress: #8f76ff;
+  --status-review: #ffb454;
+  --status-blocked: #ff5f5a;
+  --status-done: #3dd68c;
+  --status-canceled: #5a647f;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.42);
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --dialog-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.28);
+  --glow-accent: rgba(51, 156, 255, 0.3);
+  --glow-cyan: rgba(77, 178, 255, 0.3);
+  --glow-danger: rgba(255, 95, 90, 0.3);
+  --glow-success: rgba(61, 214, 140, 0.3);
+  --glow-amber: rgba(255, 180, 84, 0.3);
+  --font-mono: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 * {
@@ -4456,7 +4477,6 @@ kbd {
   place-items: center;
   padding: 20px;
   background: rgba(13, 14, 16, 0.32);
-  backdrop-filter: blur(1.5px);
 }
 
 .delete-dialog {
@@ -6075,7 +6095,6 @@ kbd {
 
 .task-dialog::backdrop {
   background: rgba(13, 14, 16, 0.32);
-  backdrop-filter: blur(1px);
 }
 
 .task-dialog.is-expanded {
@@ -7123,7 +7142,6 @@ kbd {
   border-radius: 50%;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(16px);
   transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
@@ -8335,7 +8353,6 @@ kbd {
   border-radius: 15px;
   background: color-mix(in srgb, var(--surface-raised) 94%, transparent);
   box-shadow: var(--dialog-shadow);
-  backdrop-filter: blur(18px);
 }
 
 .ai-chat-model-menu-wrap .ai-chat-option-menu {
@@ -8624,7 +8641,6 @@ kbd {
   place-items: center;
   padding: 18px;
   background: rgba(15, 15, 17, 0.28);
-  backdrop-filter: blur(2px);
 }
 
 .ai-chat-confirm {
@@ -9386,10 +9402,10 @@ kbd {
   max-height: 14px;
 }
 
-.board-column.status-todo .column-header { color: #9747ff; }
-.board-column.status-in_progress .column-header { color: #00a558; }
-.board-column.status-in_review .column-header { color: #317cff; }
-.board-column.status-blocked .column-header { color: #e5484d; }
+.board-column.status-todo .column-header { color: var(--status-todo); }
+.board-column.status-in_progress .column-header { color: var(--status-progress); }
+.board-column.status-in_review .column-header { color: var(--status-review); }
+.board-column.status-blocked .column-header { color: var(--status-blocked); }
 
 .column-actions {
   color: inherit;
@@ -9564,7 +9580,7 @@ kbd {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #317cff;
+  background: var(--accent);
   pointer-events: none;
 }
 
@@ -9789,7 +9805,7 @@ kbd {
 }
 
 .task-progress-segments > span.is-complete {
-  background: #00a558;
+  background: var(--status-done);
 }
 
 .task-processing-row {
@@ -10164,7 +10180,6 @@ kbd {
   padding: 0 8px 12px;
 }
 
-.board-scroll,
 .board-column,
 .column-list,
 .other-tasks-list {
@@ -10172,7 +10187,6 @@ kbd {
   -ms-overflow-style: none;
 }
 
-.board-scroll::-webkit-scrollbar,
 .board-column::-webkit-scrollbar,
 .column-list::-webkit-scrollbar,
 .other-tasks-list::-webkit-scrollbar {
@@ -11290,7 +11304,7 @@ kbd {
 
 .dashboard-reason.tone-blocked,
 .dashboard-reason.tone-overdue { color: var(--status-blocked); }
-.dashboard-reason.tone-unread { color: #317cff; }
+.dashboard-reason.tone-unread { color: var(--accent); }
 
 .dashboard-status-icon,
 .gantt-status-icon {
@@ -12329,4 +12343,1636 @@ kbd {
   .collab-panel-body {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ============================================================
+   Aurora Command Deck v3 — Codex-fused skin
+   Flat Codex-style surfaces. Aurora / glass / neon removed per
+   v3 design; only status energy bars, focus rings and the
+   running pulse remain as identity accents.
+   ============================================================ */
+
+.app-shell {
+  position: relative;
+  isolation: isolate;
+  background: var(--bg);
+}
+
+/* ============================================================
+   Aurora Command Deck — panel layer
+   Glass surfaces + neon energy channels. Overrides the default
+   Linear-style flat panels; DOM/event contracts untouched.
+   ============================================================ */
+
+/* --- Glass shell: sidebar rail, header, toolbar --- */
+.app-nav {
+  background: var(--sidebar-bg);
+  border-right: var(--border-hairline) solid var(--border);
+}
+
+.workspace-header {
+  background: var(--header-bg);
+  border-bottom: var(--border-hairline) solid var(--border);
+}
+
+.board-toolbar {
+  background: var(--header-bg);
+}
+
+.view-tabs {
+  background: var(--surface-muted);
+  border: var(--border-hairline) solid var(--border);
+}
+
+.view-tab {
+  border-radius: 12.5px;
+  letter-spacing: 0.06em;
+}
+
+.view-tab.active {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: none;
+  border-color: var(--border-strong);
+}
+
+/* --- Board background: Codex flat base --- */
+.app-shell .issue-board-layout,
+.app-shell .board-scroll {
+  background: transparent;
+}
+
+:root[data-theme="dark"] .issue-board-layout {
+  background: transparent;
+}
+
+/* --- Columns: flat Codex panels with 3px status energy bar --- */
+.board-column {
+  position: relative;
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+  background: var(--surface);
+  box-shadow: none;
+}
+
+.board-column::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--status-color, var(--status-backlog));
+  content: "";
+  pointer-events: none;
+}
+
+.board-column.status-backlog { --status-color: var(--status-backlog); --status-glow: transparent; }
+.board-column.status-todo { --status-color: var(--status-todo); --status-glow: var(--glow-cyan); }
+.board-column.status-in_progress { --status-color: var(--status-progress); --status-glow: var(--glow-accent); }
+.board-column.status-in_review { --status-color: var(--status-review); --status-glow: var(--glow-amber); }
+.board-column.status-blocked { --status-color: var(--status-blocked); --status-glow: var(--glow-danger); }
+.board-column.status-done { --status-color: var(--status-done); --status-glow: var(--glow-success); }
+.board-column.status-canceled { --status-color: var(--status-canceled); --status-glow: transparent; }
+
+.board-column:hover {
+  border-color: color-mix(in srgb, var(--status-color, var(--border)) 45%, var(--border));
+}
+
+.board-column.is-drop-target {
+  border-color: var(--border-strong);
+  box-shadow: 0 0 24px var(--status-glow, var(--glow-accent));
+}
+
+.column-header {
+  border-radius: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+}
+
+.board-column.status-todo .column-header,
+.board-column.status-in_progress .column-header,
+.board-column.status-in_review .column-header,
+.board-column.status-blocked .column-header {
+  background: transparent;
+  color: var(--status-color);
+}
+
+.column-header h2 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.task-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-column .column-list {
+  background: transparent;
+}
+
+/* --- Empty column: dashed glowing frame --- */
+.column-empty {
+  border: 1px dashed color-mix(in srgb, var(--status-color, var(--border)) 55%, transparent);
+  border-radius: 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* --- Task cards: flat Codex cards --- */
+.task-card {
+  position: relative;
+  overflow: hidden;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.task-card::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--status-color, var(--status-backlog)), transparent 85%);
+  content: "";
+  pointer-events: none;
+}
+
+.task-card:hover,
+.task-card.is-context-open {
+  border-color: color-mix(in srgb, var(--status-color, var(--border-strong)) 55%, var(--border));
+  box-shadow: var(--card-shadow);
+  transform: none;
+}
+
+.task-card.status-backlog { --status-color: var(--status-backlog); --status-glow: transparent; }
+.task-card.status-todo { --status-color: var(--status-todo); --status-glow: var(--glow-cyan); }
+.task-card.status-in_progress { --status-color: var(--status-progress); --status-glow: var(--glow-accent); }
+.task-card.status-in_review { --status-color: var(--status-review); --status-glow: var(--glow-amber); }
+.task-card.status-blocked { --status-color: var(--status-blocked); --status-glow: var(--glow-danger); }
+.task-card.status-done { --status-color: var(--status-done); --status-glow: var(--glow-success); }
+.task-card.status-canceled { --status-color: var(--status-canceled); --status-glow: transparent; }
+
+.task-identifier {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.task-card h3,
+.app-shell.embedded .task-card h3 {
+  font-size: 13px;
+  line-height: 18px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@keyframes aurora-card-pulse {
+  0%, 100% { box-shadow: var(--card-shadow); }
+  50% { box-shadow: 0 0 12px var(--glow-accent), var(--card-shadow); }
+}
+
+/* Running cards: quiet opacity pulse (2.4s) */
+.task-card.is-running-card {
+  animation: aurora-card-pulse 2.4s ease-in-out infinite;
+}
+
+.task-card.is-processing-card {
+  box-shadow: var(--card-shadow);
+}
+
+.task-card.status-in_progress .processing-status-indicator,
+.task-card.is-running-card .processing-status-indicator {
+  color: var(--status-progress);
+}
+
+/* Blocked cards: diagonal stripe texture */
+.task-card.status-blocked {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    transparent 0 6px,
+    rgba(255, 93, 122, 0.05) 6px 12px
+  );
+}
+
+/* Canceled cards: dimmed */
+.task-card.status-canceled {
+  opacity: 0.6;
+}
+
+/* Dragging: plasma state */
+.task-card.is-dragging {
+  opacity: 0.92;
+  transform: scale(0.92);
+  border-color: var(--border-strong);
+  box-shadow: 0 0 32px var(--glow-accent);
+  z-index: 30;
+}
+
+/* Priority chips keep their neon family colors */
+.priority-chip,
+.task-card .priority-chip {
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+/* --- Ghost add button: neon halo on hover --- */
+.add-task-button:hover {
+  background: var(--accent-soft) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 12px var(--glow-accent);
+}
+
+/* --- Other tasks panel: flat drawer --- */
+.app-shell .other-tasks-panel {
+  background: var(--surface-raised);
+  border-left: var(--border-hairline) solid var(--border);
+}
+
+/* --- Aurora Command Deck: tasks-only toggle --- */
+.tasks-only-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.tasks-only-toggle:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.tasks-only-toggle-track {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--surface-active);
+  transition: background 160ms ease;
+}
+
+.tasks-only-toggle-track span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition: transform 180ms cubic-bezier(0.4, 0, 0.2, 1), background 160ms ease;
+}
+
+.tasks-only-toggle.is-on {
+  border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border));
+  color: var(--accent-2);
+  box-shadow: 0 0 12px var(--glow-cyan);
+}
+
+.tasks-only-toggle.is-on .tasks-only-toggle-track {
+  background: color-mix(in srgb, var(--accent-2) 45%, transparent);
+}
+
+.tasks-only-toggle.is-on .tasks-only-toggle-track span {
+  transform: translateX(12px);
+  background: var(--accent-2);
+  box-shadow: 0 0 6px var(--glow-cyan);
+}
+
+/* ============================================================
+   Aurora Command Deck — Squad Deck (four-zone drawer)
+   Replaces the form-wall collaboration panel with a zoned
+   command deck: Agent roster / Squads (3-step wizard) /
+   Task control / Activity feed.
+   ============================================================ */
+
+:root,
+:root[data-theme="dark"] {
+  --surface-base: var(--surface);
+  --border-subtle: var(--border);
+}
+
+.collab-panel {
+  border-bottom: var(--border-hairline) solid var(--border);
+  background: var(--header-bg);
+}
+
+.collab-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  min-height: 48px;
+  overflow-x: auto;
+}
+
+.collab-panel-body {
+  display: block;
+  padding: 0 16px 16px;
+  max-height: min(62vh, 560px);
+  overflow: auto;
+}
+
+/* Zone tabs */
+.collab-zone-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.collab-zone-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: var(--border-hairline) solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.collab-zone-tab:hover {
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+}
+
+.collab-zone-tab.active {
+  background: var(--surface-raised);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--accent);
+  box-shadow: 0 0 12px var(--glow-accent);
+}
+
+.collab-zone-tab svg {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+}
+
+.collab-zone-tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Zone scaffolding */
+.collab-zone {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.collab-zone-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.collab-zone-head h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.collab-zone label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.collab-zone input,
+.collab-zone select,
+.collab-zone textarea {
+  width: 100%;
+}
+
+.button.compact {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+/* Empty states with guidance */
+.collab-empty {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+  padding: 16px 14px;
+  border: 1px dashed color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.collab-empty p {
+  margin: 0;
+}
+
+/* Agent roster */
+.collab-agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collab-agent-chip {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.collab-avatar {
+  display: grid;
+  place-items: center;
+  grid-row: span 2;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.collab-agent-chip-name {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collab-agent-chip-skills {
+  overflow: hidden;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Squad wizard (3 steps) */
+.collab-wizard {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: var(--border-hairline) solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface-raised);
+  box-shadow: 0 0 18px var(--glow-accent);
+}
+
+.collab-wizard-steps {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.collab-wizard-step {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.collab-wizard-step.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 10px var(--glow-accent);
+}
+
+.collab-wizard-step.done {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.collab-wizard-screen {
+  display: grid;
+  gap: 10px;
+}
+
+.collab-wizard-screen h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.collab-wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.collab-wizard-summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.collab-wizard-summary dt {
+  color: var(--text-tertiary);
+}
+
+.collab-wizard-summary dd {
+  margin: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Member picker */
+.collab-member-picker-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.collab-member-picker {
+  display: grid;
+  gap: 6px;
+  max-height: 190px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.collab-member-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.collab-member-option:hover {
+  border-color: var(--border-strong);
+}
+
+.collab-member-option.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 10px var(--glow-accent);
+}
+
+.collab-member-option .collab-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+}
+
+.collab-member-option > svg {
+  margin-left: auto;
+  width: 13px;
+  height: 13px;
+  color: var(--accent);
+}
+
+.collab-member-picker-empty {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+/* Squad cards */
+.collab-squad-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.collab-squad-card {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.collab-squad-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.collab-squad-card-head > div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.collab-squad-card-head strong {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collab-squad-card-head small {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.collab-squad-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.collab-squad-tags span {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-size: 10px;
+}
+
+.collab-squad-tags span.muted {
+  background: var(--surface-muted);
+  color: var(--text-tertiary);
+}
+
+.collab-squad-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Task control zone */
+.collab-task-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.collab-task-state-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-color, var(--text-tertiary));
+  box-shadow: 0 0 8px var(--status-glow, transparent);
+}
+
+.collab-task-state-dot.status-backlog { --status-color: var(--status-backlog); }
+.collab-task-state-dot.status-todo { --status-color: var(--status-todo); --status-glow: var(--glow-cyan); }
+.collab-task-state-dot.status-in_progress { --status-color: var(--status-progress); --status-glow: var(--glow-accent); }
+.collab-task-state-dot.status-in_review { --status-color: var(--status-review); --status-glow: var(--glow-amber); }
+.collab-task-state-dot.status-blocked { --status-color: var(--status-blocked); --status-glow: var(--glow-danger); }
+.collab-task-state-dot.status-done { --status-color: var(--status-done); --status-glow: var(--glow-success); }
+.collab-task-state-dot.status-canceled { --status-color: var(--status-canceled); }
+
+.collab-dependency {
+  margin-top: 4px;
+}
+
+/* Activity feed */
+.collab-activity-list {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  max-height: 320px;
+  margin: 0;
+  padding: 0 2px;
+  list-style: none;
+  overflow: auto;
+}
+
+.collab-activity-item {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.collab-activity-time {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.collab-activity-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  color: var(--accent-2);
+}
+
+.collab-activity-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.collab-activity-item p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Modals */
+.collab-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(26, 28, 31, 0.35);
+}
+
+.collab-modal {
+  display: grid;
+  gap: 10px;
+  width: min(360px, 100%);
+  max-height: 82vh;
+  padding: 18px;
+  overflow: auto;
+  border: var(--border-hairline) solid var(--border-strong);
+  border-radius: 16px;
+  background: var(--surface-raised);
+  box-shadow: var(--dialog-shadow), 0 0 24px var(--glow-accent);
+}
+
+.collab-modal h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.collab-modal label {
+  display: grid;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.collab-modal input,
+.collab-modal select {
+  width: 100%;
+}
+
+.collab-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* --- Aurora Command Deck: task card ⚡ claim button --- */
+.task-card-claim {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+  height: 20px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: var(--border-hairline) solid color-mix(in srgb, var(--accent-2) 55%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+  color: var(--accent-2);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: box-shadow 160ms ease, background 160ms ease;
+}
+
+.task-card-claim:hover {
+  background: color-mix(in srgb, var(--accent-2) 24%, transparent);
+  box-shadow: 0 0 12px var(--glow-cyan);
+}
+
+.task-card-claim-bolt {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.task-card-claim[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================================
+   Aurora Command Deck — view layer
+   Gantt / list / dashboard surfaces share the energy palette.
+   ============================================================ */
+
+.gantt_task_line.gantt-status-todo { --gantt-bar-color: var(--status-todo); }
+.gantt_task_line.gantt-status-in_progress { --gantt-bar-color: var(--status-progress); }
+.gantt_task_line.gantt-status-in_review { --gantt-bar-color: var(--status-review); }
+.gantt_task_line.gantt-status-blocked { --gantt-bar-color: var(--status-blocked); }
+.gantt_task_line.gantt-status-done { --gantt-bar-color: var(--status-done); }
+.gantt_task_line.gantt-status-canceled { --gantt-bar-color: var(--status-canceled); }
+
+.gantt_task_line {
+  border-radius: 6px;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--gantt-bar-color, var(--status-progress)) 45%, transparent);
+}
+
+.gantt_today .gantt_task_line,
+.gantt_task_line.is-today {
+  box-shadow: 0 0 14px var(--glow-cyan);
+}
+
+/* Dashboard hero: aurora gradient */
+.dashboard-hero-accent,
+.dashboard-hero-value {
+  background: none;
+  color: var(--text-primary);
+}
+
+/* List view: status dots glow with energy color */
+.issue-list-status-icon {
+  filter: drop-shadow(0 0 5px var(--status-glow, transparent));
+}
+
+.issue-list-group.status-todo .issue-list-status-icon { --status-glow: var(--glow-cyan); }
+.issue-list-group.status-in_progress .issue-list-status-icon { --status-glow: var(--glow-accent); }
+.issue-list-group.status-in_review .issue-list-status-icon { --status-glow: var(--glow-amber); }
+.issue-list-group.status-blocked .issue-list-status-icon { --status-glow: var(--glow-danger); }
+.issue-list-group.status-done .issue-list-status-icon { --status-glow: var(--glow-success); }
+
+/* Issue list rows: subtle glass */
+.issue-list-view {
+  background: transparent;
+}
+
+.issue-list-row {
+  background: var(--surface);
+  border: var(--border-hairline) solid transparent;
+  border-radius: 10px;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.issue-list-row:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+/* ============================================================
+   Aurora Command Deck — motion & accessibility
+   ============================================================ */
+
+@keyframes aurora-dot-pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.55; }
+}
+
+.task-processing-row.is-running .task-processing-dot,
+.task-processing.is-running .task-processing-dot,
+.processing-status-indicator.is-running,
+.processing-status-dot.is-running {
+  animation: aurora-dot-pulse 2.4s ease-in-out infinite;
+}
+
+/* View/content transitions: fade in + rise (160ms ease-out) */
+.board-toolbar,
+.issue-board-layout,
+.issue-list-view,
+.gantt-view,
+.dashboard-view {
+  animation: aurora-content-in 160ms ease-out;
+}
+
+@keyframes aurora-content-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Segmented indicator movement is handled by the active class transition */
+.view-tab {
+  transition: background 200ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms ease, box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* HUD letter-spacing on view labels and zone titles */
+.view-tab,
+.collab-zone-head h2,
+.column-header h2 {
+  letter-spacing: 0.08em;
+}
+
+/* Focus rings: neon accent (accessible keyboard navigation) */
+.collab-zone-tab:focus-visible,
+.collab-member-option:focus-visible,
+.collab-squad-actions button:focus-visible,
+.collab-modal button:focus-visible,
+.tasks-only-toggle:focus-visible,
+.task-card-claim:focus-visible {
+  outline: 2px solid var(--accent-2);
+  outline-offset: 1px;
+}
+
+/* Icon-only controls always expose an accessible name (aria-label in JSX) */
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob,
+  .task-card.is-running-card,
+  .task-processing-row.is-running .task-processing-dot,
+  .task-processing.is-running .task-processing-dot,
+  .processing-status-indicator.is-running,
+  .processing-status-dot.is-running,
+  .board-toolbar,
+  .issue-board-layout,
+  .issue-list-view,
+  .gantt-view,
+  .dashboard-view,
+  .view-tab,
+  .task-card,
+  .task-card:hover,
+  .task-card.is-context-open,
+  .tasks-only-toggle,
+  .collab-zone-tab,
+  .collab-member-option {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ============================================================
+   Aurora Command Deck v2 — comfort pass
+   Whitespace breathing, restrained hierarchy, quieter motion.
+   Values per PM v2 design §1.2–1.5; tokens already updated.
+   ============================================================ */
+
+/* §1.2 Whitespace: card padding, column/card gaps, row height */
+.board-column .task-card {
+  padding: 18px;
+}
+
+.board-scroll .board {
+  gap: 28px;
+}
+
+.board-column .column-list {
+  gap: 12px;
+}
+
+.issue-list-view .issue-list-row {
+  min-height: 44px;
+}
+
+.board-column .column-header {
+  height: 34px;
+}
+
+/* Content breathing band: top spacing inside the board region */
+.workspace .issue-board-layout {
+  padding-top: 16px;
+}
+
+/* Dialog/drawer padding */
+.collab-modal-backdrop .collab-modal {
+  padding: 24px;
+}
+
+/* §1.3 Hierarchy: one accent per context — card body stays neutral glass,
+   whole-card glow removed (only column energy bar + 2px card edge remain) */
+.board-column .task-card {
+  box-shadow: var(--card-shadow);
+}
+
+.board-column .task-card.is-dragging {
+  box-shadow: 0 0 24px var(--glow-accent);
+}
+
+/* Column headers keep their energy tint, cards stay neutral */
+.board-column .column-header {
+  color: var(--status-color, var(--text-secondary));
+}
+
+/* §1.4 Motion restraint: segmented 200ms, buttons press 0.98 */
+.view-tabs .view-tab {
+  transition: background 200ms cubic-bezier(0.4, 0, 0.2, 1), color 160ms ease;
+}
+
+.button:active,
+.collab-zone-tab:active,
+.view-tab:active,
+.tasks-only-toggle:active {
+  transform: scale(0.98);
+}
+
+/* §1.5 Quality: primary buttons get the v2 gradient with dark text */
+.app-shell .button.primary {
+  background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
+  color: #0b0f1f;
+  border: 0;
+  border-radius: 10px;
+  font-weight: 600;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.app-shell .button.primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+/* --- Aurora v2: Squad as dedicated view (design §2) --- */
+.squad-view-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: 16px;
+}
+
+.squad-view-shell .collab-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.squad-view-shell .collab-panel-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  padding: 0 18px 18px;
+}
+
+.squad-view-shell .collab-zone-tabs {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+}
+
+.squad-view-shell .collab-zone {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Activity feed: permanent bottom section, ~1/3 of view height */
+.squad-view-shell .collab-activity {
+  flex: 0 1 33%;
+  min-height: 160px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: var(--border-hairline) solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.squad-view-shell .collab-activity .collab-zone-head {
+  flex: 0 0 auto;
+}
+
+.squad-view-shell .collab-activity-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+/* ============================================================
+   Aurora Command Deck v3 — Codex-fused components
+   §4 component list: flat ink/blue palette, 12.5px radii,
+   OpenAI Sans stack, hairline borders. Identity accents kept:
+   status energy bars, mono digits, running pulse.
+   ============================================================ */
+
+/* --- Command bar: 46px Codex toolbar + NEXUS logo --- */
+.board-toolbar {
+  flex: 0 0 46px;
+  padding: 0 16px;
+  border-bottom: var(--border-hairline) solid var(--border);
+}
+
+.nexus-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #7555e8 0%, #339cff 100%);
+  color: #ffffff;
+}
+
+.nexus-logo svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* --- Primary buttons: Codex ink (dark) with white text --- */
+.app-shell .button.primary {
+  background: #1a1c1f;
+  color: #ffffff;
+  border: 0;
+  border-radius: 12.5px;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.app-shell .button.primary:hover:not(:disabled) {
+  background: rgba(26, 28, 31, 0.88);
+  filter: none;
+}
+
+.app-shell .button.primary:disabled {
+  opacity: 0.4;
+}
+
+/* --- ⚡ claim button: the single blue-solid action --- */
+.task-card-claim {
+  border: 0;
+  border-radius: 12.5px;
+  background: #339cff;
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: none;
+}
+
+.task-card-claim:hover {
+  background: #2e8fe0;
+  box-shadow: none;
+}
+
+/* --- Secondary buttons: flat hairline --- */
+.app-shell .button.secondary {
+  background: rgba(26, 28, 31, 0.05);
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+  color: var(--text-primary);
+}
+
+.app-shell .button.secondary:hover:not(:disabled) {
+  background: rgba(26, 28, 31, 0.09);
+}
+
+/* --- Inputs & focus: Codex border + blue focus ring --- */
+.app-shell input,
+.app-shell textarea,
+.app-shell select {
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.app-shell input:focus-visible,
+.app-shell textarea:focus-visible,
+.app-shell select:focus-visible {
+  outline: 2px solid #339cff;
+  outline-offset: 2px;
+  border-color: #339cff;
+}
+
+/* --- Dialogs: white, 20px radius, Codex 2xl --- */
+.collab-modal,
+.delete-dialog,
+.project-create-dialog {
+  border-radius: 20px;
+  background: var(--surface-raised);
+  box-shadow: var(--dialog-shadow);
+}
+
+/* --- Gantt: flat white lanes, no glow --- */
+.gantt_task_line {
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.gantt_today .gantt_task_line,
+.gantt_task_line.is-today {
+  box-shadow: none;
+}
+
+.gantt_today {
+  border-left-color: #339cff;
+}
+
+/* --- List view: flat white rows with hover --- */
+.issue-list-view {
+  background: var(--surface);
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+}
+
+.issue-list-row:hover {
+  background: rgba(26, 28, 31, 0.05);
+}
+
+/* --- Collab deck flat surfaces --- */
+.collab-agent-chip,
+.collab-squad-card,
+.collab-member-option,
+.collab-wizard {
+  border-radius: 12.5px;
+  box-shadow: none;
+}
+
+.collab-activity-item {
+  background: var(--surface-muted);
+}
+
+/* --- Focus rings: Codex blue everywhere --- */
+.collab-zone-tab:focus-visible,
+.collab-member-option:focus-visible,
+.collab-squad-actions button:focus-visible,
+.collab-modal button:focus-visible,
+.tasks-only-toggle:focus-visible,
+.task-card-claim:focus-visible,
+.view-tab:focus-visible {
+  outline: 2px solid #339cff;
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   v3 — board horizontal scroll affordance
+   The kanban board must visibly scroll horizontally so right-hand
+   columns are reachable in narrow sidebars. Thin Codex-style bar.
+   ============================================================ */
+
+.workspace .board-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(26, 28, 31, 0.2) transparent;
+}
+
+.board-scroll::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+.board-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.board-scroll::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: rgba(26, 28, 31, 0.2);
+  background-clip: padding-box;
+}
+
+.board-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 28, 31, 0.35);
+  background-clip: padding-box;
+}
+
+:root[data-theme="dark"] .board-scroll {
+  scrollbar-color: rgba(255, 255, 255, 0.22) transparent;
+}
+
+:root[data-theme="dark"] .board-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.22);
+  background-clip: padding-box;
+}
+
+:root[data-theme="dark"] .board-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.38);
+  background-clip: padding-box;
+}
+
+/* ============================================================
+   v3.1 — squad deck colloquial UX
+   My tools groups, scan bar, 3-state dots, auto-detect badge,
+   colloquial wizard, advanced settings fold, feedback toast.
+   ============================================================ */
+
+.collab-scan-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-muted);
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.collab-scan-message.muted {
+  color: var(--text-tertiary);
+}
+
+.collab-tool-group {
+  display: grid;
+  gap: 6px;
+}
+
+.collab-tool-group-title {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.collab-tool-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.collab-tool-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-quaternary);
+}
+
+.collab-tool-dot.is-ready {
+  background: var(--status-done);
+  box-shadow: 0 0 6px var(--glow-success);
+}
+
+.collab-tool-dot.is-pending {
+  background: var(--warning);
+  box-shadow: 0 0 6px var(--glow-amber);
+}
+
+.collab-tool-dot.is-missing {
+  background: var(--text-quaternary);
+}
+
+.collab-badge-auto {
+  justify-self: start;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.collab-badge-auto.small {
+  margin-left: auto;
+  font-size: 9px;
+}
+
+.collab-badge-auto.small.missing {
+  background: var(--surface-muted);
+  color: var(--text-tertiary);
+}
+
+.collab-avatar-terminal {
+  background: var(--surface-active);
+  color: var(--text-secondary);
+}
+
+.collab-avatar-terminal svg {
+  width: 13px;
+  height: 13px;
+}
+
+.collab-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.collab-wizard-name-input {
+  font-size: 15px !important;
+  padding: 10px 12px !important;
+}
+
+.collab-wizard-leader {
+  margin-top: 4px;
+}
+
+.collab-advanced {
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 10px;
+  padding: 0;
+}
+
+.collab-advanced summary {
+  padding: 8px 12px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.collab-advanced summary::-webkit-details-marker {
+  display: none;
+}
+
+.collab-advanced summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 160ms ease;
+}
+
+.collab-advanced[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.collab-advanced-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 12px 12px;
+  border-top: var(--border-hairline) solid var(--border);
+  padding-top: 10px;
+}
+
+.collab-authorize-copy {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.collab-toast {
+  position: fixed;
+  z-index: 80;
+  right: 16px;
+  bottom: 16px;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border: var(--border-hairline) solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: var(--dialog-shadow);
+  color: var(--text-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  animation: aurora-content-in 160ms ease-out;
+}
+
+.collab-member-option.is-unauthorized {
+  opacity: 0.72;
+}
+
+.collab-member-option.is-missing {
+  opacity: 0.45;
+}
+
+/* --- v3 P2-2: language toggle (中 / EN) --- */
+.language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 10px;
+  border: var(--border-hairline) solid var(--border);
+  border-radius: 12.5px;
+  background: var(--surface-muted);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.language-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.language-toggle span.active {
+  color: var(--text-primary);
+}
+
+.language-toggle-sep {
+  color: var(--text-quaternary);
+}
+
+/* --- v3.1 P1-3: leader badge + login hint --- */
+.collab-squad-avatar-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.collab-leader-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.collab-leader-badge svg {
+  width: 9px;
+  height: 9px;
+}
+
+.collab-login-hint {
+  grid-column: 1 / -1;
+  justify-self: start;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.collab-login-hint:hover {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
 }

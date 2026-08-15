@@ -45,9 +45,9 @@ test("new workflow statuses use the central Linear icon mapping and semantic col
   assert.match(iconSource, /blocked: "alert"/);
   assert.match(iconSource, /canceled: "statusCanceled"/);
   assert.match(iconSource, /statusCanceled: \{[\s\S]*?M8 15A7 7 0 1 0 8 1/);
-  assert.match(styles, /--status-review: #43bc58/);
-  assert.match(styles, /--status-blocked: #f34e52/);
-  assert.match(styles, /--status-canceled: #9e9ea1/);
+  assert.match(styles, /--status-review: #e8930c/);
+  assert.match(styles, /--status-blocked: #e02e2a/);
+  assert.match(styles, /--status-canceled: #8a94a6/);
   assert.match(styles, /\.status-icon-review \{ color: var\(--status-review\); \}/);
   assert.match(styles, /\.status-icon-blocked \{ color: var\(--status-blocked\); \}/);
   assert.match(styles, /\.status-icon-canceled \{ color: var\(--status-canceled\); \}/);

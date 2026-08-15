@@ -9,6 +9,7 @@ import {
   taskboardIconSource,
   type TaskboardIconName,
 } from "./TaskboardIcon";
+import { LinearIcon } from "./LinearIcon";
 
 export const STATUS_DETAILS: Record<
   TaskStatus,
@@ -59,6 +60,8 @@ export function StatusIcon({ status }: { status: TaskStatus }) {
 }
 
 function ColumnStatusIcon({ status }: { status: TaskStatus }) {
+  if (status === "done") return <LinearIcon name="statusDone" />;
+  if (status === "canceled") return <LinearIcon name="statusCanceled" />;
   return <TaskboardIcon name={COLUMN_STATUS_ICONS[status]} />;
 }
 
@@ -83,6 +86,7 @@ interface BoardColumnProps {
   onEdit: (task: Task) => void;
   onUpdate: (task: Task, changes: Partial<TaskDraft>) => Promise<Task>;
   onComplete: (task: Task) => void;
+  onClaim?: (task: Task) => void;
   onContextMenu: (task: Task, position: { x: number; y: number }) => void;
   onDragStart: (task: Task, height: number) => void;
   onDragEnd: () => void;
@@ -112,6 +116,7 @@ export function BoardColumn({
   onEdit,
   onUpdate,
   onComplete,
+  onClaim,
   onContextMenu,
   onDragStart,
   onDragEnd,
@@ -228,6 +233,7 @@ export function BoardColumn({
               onEdit={onEdit}
               onUpdate={onUpdate}
               onComplete={onComplete}
+              onClaim={onClaim}
               onContextMenu={onContextMenu}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}

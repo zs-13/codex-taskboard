@@ -40,6 +40,7 @@ interface TaskCardProps {
   onEdit: (task: Task) => void;
   onUpdate: (task: Task, changes: Partial<TaskDraft>) => Promise<Task>;
   onComplete?: (task: Task) => void;
+  onClaim?: (task: Task) => void;
   onContextMenu: (task: Task, position: { x: number; y: number }) => void;
   onDragStart: (task: Task, height: number) => void;
   onDragEnd: () => void;
@@ -357,6 +358,7 @@ export function TaskCard({
   onEdit,
   onUpdate,
   onComplete,
+  onClaim,
   onContextMenu,
   onDragStart,
   onDragEnd,
@@ -427,6 +429,21 @@ export function TaskCard({
           <span className="task-identifier">ID: {displayIdentifier}</span>
         </span>
         {presentation.unread && <span className="task-unread-dot" aria-label={text("有未读更新", "Unread updates")} />}
+        {variant === "main" && onClaim && (task.status === "backlog" || task.status === "todo") && (
+          <button
+            className="task-card-claim"
+            type="button"
+            aria-label={text(`让 TA 干 ${displayIdentifier}`, `Let it run ${displayIdentifier}`)}
+            title={text("让某个工具/成员开始做", "Let a tool or member start on it")}
+            onClick={(event) => {
+              event.stopPropagation();
+              onClaim(task);
+            }}
+          >
+            <span className="task-card-claim-bolt">⚡</span>
+            <span>{text("让 TA 干", "Let it run")}</span>
+          </button>
+        )}
         {task.status === "in_review" && onComplete && (
           <button
             className="task-card-complete"

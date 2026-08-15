@@ -54,8 +54,8 @@ test("main issue cards stay compact while sidebar cards show ownership and creat
 });
 
 test("scrollbars stay proportional while the workflow node library hides its bar", () => {
-  assert.match(styles, /:root \{[\s\S]*?--scrollbar-thumb: rgba\(27, 27, 27, 0\.15\)/);
-  assert.match(styles, /:root\[data-theme="dark"\] \{[\s\S]*?--scrollbar-thumb: rgba\(238, 238, 239, 0\.15\)/);
+  assert.match(styles, /:root \{[\s\S]*?--scrollbar-thumb: rgba\(26, 28, 31, 0\.14\)/);
+  assert.match(styles, /:root\[data-theme="dark"\] \{[\s\S]*?--scrollbar-thumb: rgba\(255, 255, 255, 0\.15\)/);
   assert.match(styles, /\* \{[\s\S]*?scrollbar-color: var\(--scrollbar-thumb\) transparent[\s\S]*?scrollbar-width: thin/);
   assert.match(styles, /\*::\-webkit-scrollbar-track,[\s\S]*?\*::\-webkit-scrollbar-track-piece,[\s\S]*?\*::\-webkit-scrollbar-corner \{[\s\S]*?background: transparent/);
   assert.match(styles, /\*::\-webkit-scrollbar-button \{[\s\S]*?display: none/);

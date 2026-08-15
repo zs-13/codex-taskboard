@@ -17,18 +17,20 @@ const styles = await readFile(new URL("../web/src/components/workflow.css", impo
 const globalStyles = await readFile(new URL("../web/src/styles.css", import.meta.url), "utf8");
 
 test("the taskboard defaults to issues and exposes the current project views", () => {
-  assert.match(appSource, /type BoardView = "dashboard" \| "issues" \| "list" \| "gantt" \| "workflow"/);
+  assert.match(appSource, /type BoardView = "dashboard" \| "issues" \| "list" \| "gantt" \| "workflow" \| "squad"/);
   assert.match(
     appSource,
     /function readProjectBoardView\(projectId: string\): BoardView \{\s*const view = [^;]+;\s*return [\s\S]*?\? view\s*: "issues";\s*\}/,
   );
-  assert.match(appSource, /useState<BoardView>\(\(\) => readProjectBoardView\(initialProjectId\)\)/);
+  assert.match(appSource, /window\.location\.hash === "#squad"/);
   assert.match(appSource, />\s*\{text\("仪表盘", "Dashboard"\)\}\s*<\/button>/);
   assert.match(appSource, />\s*\{text\("议题看板", "Issue board"\)\}\s*<\/button>/);
   assert.match(appSource, />\s*\{text\("列表视图", "List"\)\}\s*<\/button>/);
   assert.match(appSource, />\s*\{text\("甘特图", "Gantt"\)\}\s*<\/button>/);
+  assert.match(appSource, />\s*<LinearIcon name="branch" \/>\s*<span>\{text\("小队", "Squads"\)\}<\/span>\s*<\/button>/);
   assert.match(appSource, /aria-pressed=\{boardView === "issues"\}/);
   assert.match(appSource, /onClick=\{\(\) => selectBoardView\("issues"\)\}/);
+  assert.match(appSource, /onClick=\{\(\) => selectBoardView\("squad"\)\}/);
   assert.match(appSource, /const SHOW_WORKFLOW_BOARD_ENTRY = false/);
   assert.match(appSource, /SHOW_WORKFLOW_BOARD_ENTRY && \([\s\S]*?>\s*\{text\("节点模式", "Workflow"\)\}\s*<\/button>/);
   assert.match(appSource, /function changeProject[\s\S]*?setBoardView\(readProjectBoardView\(projectId\)\)/);

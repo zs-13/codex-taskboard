@@ -22,6 +22,7 @@ import {
   ApiError,
   addTaskRelation,
   archiveTask as archiveTaskRequest,
+  claimTask,
   createProjectLabel as createProjectLabelRequest,
   createProject as createProjectRequest,
   createComment,
@@ -93,6 +94,7 @@ import {
   getTaskboardI18n,
   resolveTaskboardLanguage,
   taskStatusLabel,
+  type TaskboardLanguage,
   TaskboardLanguageProvider,
 } from "./i18n";
 import {
@@ -107,6 +109,7 @@ import {
 } from "./taskConversations";
 import {
   EMPTY_TASK_FILTERS,
+  isNoiseTask,
   matchesTaskFilters,
   matchesTaskSearch,
   readTaskFilters,
@@ -141,7 +144,7 @@ import { createRevisionPoller, getRevisionPollingInterval } from "./revisionPoll
 
 type ConnectionState = "connecting" | "live" | "reconnecting";
 type Theme = "light" | "dark";
-type BoardView = "dashboard" | "issues" | "list" | "gantt" | "workflow";
+type BoardView = "dashboard" | "issues" | "list" | "gantt" | "workflow" | "squad";
 type DetailSourceScroll =
   | { projectId: string; view: "issues"; status: TaskStatus; scrollTop: number }
   | { projectId: string; view: "list"; scrollTop: number };
@@ -309,6 +312,7 @@ const DEFAULT_USER_ACTOR: ActorIdentity = {
 const GLOBAL_PROJECT_ID = "local";
 const RECENT_PROJECT_IDS_KEY = "taskboard.recentProjectIds.v1";
 const PROJECT_VIEW_KEY_PREFIX = "taskboard.project-view.v1.";
+const LANGUAGE_STORAGE_KEY = "taskboard.language.v1";
 const DEVICE_WORKSPACE_PATHS_KEY = "taskboard.deviceWorkspacePaths.v1";
 const PROJECT_CODEX_IDENTITIES_KEY = "taskboard.projectCodexIdentities.v1";
 const PROJECT_AUTOMATIONS_KEY = "taskboard.projectAutomations.v1";
@@ -336,7 +340,7 @@ function readIssueActivityKeys(storageKey: string): Record<string, string> {
 
 function readProjectBoardView(projectId: string): BoardView {
   const view = taskboardStorage.getItem(`${PROJECT_VIEW_KEY_PREFIX}${projectId}`);
-  return view === "dashboard" || view === "list" || view === "gantt" || view === "issues"
+  return view === "dashboard" || view === "list" || view === "gantt" || view === "issues" || view === "squad"
     ? view
     : "issues";
 }
@@ -390,7 +394,7 @@ function getInitialTheme(): Theme {
   if (isTheme(fromQuery)) return fromQuery;
   const stored = taskboardStorage.getItem("taskboard.theme");
   if (isTheme(stored)) return stored;
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 function readDeviceWorkspacePaths(): Record<string, string> {
@@ -688,7 +692,11 @@ export function App() {
   const undoShortcut = navigator.userAgent.includes("Macintosh") ? "⌘Z" : "Ctrl+Z";
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
   const [hostContext, setHostContext] = useState<HostContext | null>(null);
-  const language = resolveTaskboardLanguage(
+  const [languageOverride, setLanguageOverride] = useState<TaskboardLanguage | null>(() => {
+    const stored = taskboardStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return stored === "zh" || stored === "en" ? stored : null;
+  });
+  const language = languageOverride ?? resolveTaskboardLanguage(
     hostContext?.language ?? query.get("lang") ?? navigator.language,
   );
   const { locale, text } = getTaskboardI18n(language);
@@ -730,7 +738,10 @@ export function App() {
   const [connection, setConnection] = useState<ConnectionState>("connecting");
   const [search, setSearch] = useState("");
   const [filters, setFilters] = useState(readTaskFilters);
-  const [boardView, setBoardView] = useState<BoardView>(() => readProjectBoardView(initialProjectId));
+  const [boardView, setBoardView] = useState<BoardView>(() => {
+    if (window.location.hash === "#squad") return "squad";
+    return readProjectBoardView(initialProjectId);
+  });
   const [dashboardSummaryAnimatedProjectId, setDashboardSummaryAnimatedProjectId] = useState<string | null>(null);
   const [ganttZoom, setGanttZoom] = useState<GanttZoom>("week");
   const [ganttHideCompleted, setGanttHideCompleted] = useState(false);
@@ -740,6 +751,7 @@ export function App() {
   const [otherTasksMounted, setOtherTasksMounted] = useState(false);
   const [otherTasksVisible, setOtherTasksVisible] = useState(false);
   const [otherTasksTab, setOtherTasksTab] = useState<OtherTaskTab>("canceled");
+  const [tasksOnly, setTasksOnly] = useState(true);
   const [restoringTaskId, setRestoringTaskId] = useState<string | null>(null);
   const [pendingArchivedTaskDelete, setPendingArchivedTaskDelete] = useState<Task | null>(null);
   const [deletingArchivedTaskId, setDeletingArchivedTaskId] = useState<string | null>(null);
@@ -760,12 +772,11 @@ export function App() {
   const [draggedTaskHeight, setDraggedTaskHeight] = useState(0);
   const [dropTarget, setDropTarget] = useState<TaskStatus | null>(null);
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
+  const [claimingTaskId, setClaimingTaskId] = useState<string | null>(null);
   const [settlingTaskId, setSettlingTaskId] = useState<string | null>(null);
   const [openingProjectId, setOpeningProjectId] = useState<string | null>(null);
   const [openingThreadTaskId, setOpeningThreadTaskId] = useState<string | null>(null);
-  const [projectMenuOpen, setProjectMenuOpen] = useState(
-    () => taskboardStorage.getItem(FIRST_USE_COMPLETE_KEY) === null,
-  );
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
   const [projectContextMenu, setProjectContextMenu] = useState<ProjectContextMenuState | null>(null);
   const [projectCreateOpen, setProjectCreateOpen] = useState(false);
   const [projectName, setProjectName] = useState("");
@@ -793,6 +804,7 @@ export function App() {
   const dragRegionRef = useRef<HTMLDivElement>(null);
   const issueListRef = useRef<HTMLDivElement>(null);
   const boardColumnScrollRefs = useRef<Partial<Record<TaskStatus, HTMLDivElement | null>>>({});
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
   const pendingDetailSourceScrollRef = useRef<DetailSourceScroll | null>(null);
   const selectedProjectIdRef = useRef(selectedProjectId);
   selectedProjectIdRef.current = selectedProjectId;
@@ -1366,6 +1378,29 @@ export function App() {
     automationRequestContext,
     drainQueuedAutomationSaves,
   ]);
+
+  // Kanban boards are horizontally scrollable only; translate vertical wheel
+  // input into horizontal scrolling so desktop mouse users can reach the
+  // right-hand columns in narrow sidebars.
+  useEffect(() => {
+    const scroller = boardScrollRef.current;
+    if (!scroller) return;
+    let pending: number | null = null;
+    const onWheel = (event: WheelEvent) => {
+      if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      const canScrollX = scroller.scrollWidth > scroller.clientWidth + 1;
+      if (!canScrollX) return;
+      event.preventDefault();
+      scroller.scrollLeft += event.deltaY;
+      if (pending !== null) window.clearTimeout(pending);
+      pending = window.setTimeout(() => { pending = null; }, 80);
+    };
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      scroller.removeEventListener("wheel", onWheel);
+      if (pending !== null) window.clearTimeout(pending);
+    };
+  }, []);
 
   function openTaskDetail(task: Pick<Task, "identifier" | "projectId">) {
     const fullTask = tasksRef.current.find((candidate) => candidate.identifier === task.identifier);
@@ -2020,13 +2055,15 @@ export function App() {
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(
-      (task) => matchesTaskSearch(task, search, language) && matchesTaskFilters(task, filters),
+      (task) => (!tasksOnly || !isNoiseTask(task))
+        && matchesTaskSearch(task, search, language) && matchesTaskFilters(task, filters),
     );
-  }, [filters, language, search, tasks]);
+  }, [filters, language, search, tasks, tasksOnly]);
 
   const filteredArchivedTasks = useMemo(() => archivedTasks.filter(
-    (task) => matchesTaskSearch(task, search, language) && matchesTaskFilters(task, filters),
-  ), [archivedTasks, filters, language, search]);
+    (task) => (!tasksOnly || !isNoiseTask(task))
+      && matchesTaskSearch(task, search, language) && matchesTaskFilters(task, filters),
+  ), [archivedTasks, filters, language, search, tasksOnly]);
 
   const activeFilterCount = taskFilterCount(filters);
   const hasActiveTaskFilters = Boolean(search.trim()) || activeFilterCount > 0;
@@ -2110,10 +2147,20 @@ export function App() {
   }, [hasRunningTask]);
 
 
+  function changeLanguage(next: TaskboardLanguage) {
+    setLanguageOverride(next);
+    taskboardStorage.setItem(LANGUAGE_STORAGE_KEY, next);
+  }
+
   function selectBoardView(view: BoardView) {
     closeContextMenu();
     setGanttViewMenuOpen(false);
     setBoardView(view);
+    if (view === "squad") {
+      window.history.replaceState(null, "", "#squad");
+    } else if (window.location.hash === "#squad") {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
     if (selectedProjectId) {
       taskboardStorage.setItem(`${PROJECT_VIEW_KEY_PREFIX}${selectedProjectId}`, view);
     }
@@ -2361,8 +2408,21 @@ export function App() {
     }
   }
 
-  function startTaskDrag(task: Task, height: number) {
-    setDraggedTaskId(task.id);
+  async function claimTaskForExecution(task: Task) {
+    if (claimingTaskId) return;
+    setClaimingTaskId(task.id);
+    setActionError(null);
+    try {
+      await claimTask(task, null);
+      await refreshTasks(task.projectId, { quiet: true });
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : "Claim failed.");
+    } finally {
+      setClaimingTaskId(null);
+    }
+  }
+
+  function startTaskDrag(task: Task, height: number) {    setDraggedTaskId(task.id);
     setDraggedTaskHeight(height);
     setDropTarget(task.status);
   }
@@ -3411,17 +3471,10 @@ export function App() {
           </div>
         </header>
 
-        {selectedProjectId && !detailTask && !isJiraProject && (
-          <CollaborationPanel
-            projectId={selectedProjectId}
-            tasks={tasks}
-            onCreateTask={() => setEditor({ status: "todo", task: null })}
-            onRefresh={() => refreshTasks(selectedProjectId, { quiet: true })}
-            onError={setActionError}
-          />
-        )}
-
         {selectedProjectId && !detailTask && <div className="board-toolbar">
+          <span className="nexus-logo" aria-hidden="true" title="NEXUS">
+            <LinearIcon name="project" />
+          </span>
           <div className="view-tabs" aria-label={text("看板视图", "Board views")}>
             <button
               className={`view-tab${boardView === "dashboard" ? " active" : ""}`}
@@ -3454,6 +3507,16 @@ export function App() {
               onClick={() => selectBoardView("gantt")}
             >
               {text("甘特图", "Gantt")}
+            </button>
+            <button
+              className={`view-tab${boardView === "squad" ? " active" : ""}`}
+              type="button"
+              aria-pressed={boardView === "squad"}
+              onClick={() => selectBoardView("squad")}
+              title={text("小队", "Squads")}
+            >
+              <LinearIcon name="branch" />
+              <span>{text("小队", "Squads")}</span>
             </button>
             {SHOW_WORKFLOW_BOARD_ENTRY && (
               <button
@@ -3526,6 +3589,25 @@ export function App() {
               filters={filters}
               onChange={setFilters}
             />
+            {(boardView === "issues" || boardView === "list" || boardView === "gantt" || boardView === "dashboard") && (
+              <button
+                className={`tasks-only-toggle${tasksOnly ? " is-on" : ""}`}
+                type="button"
+                role="switch"
+                aria-checked={tasksOnly}
+                aria-label={tasksOnly
+                  ? text("只看任务（隐藏智能体自动任务）", "Tasks only (hide autonomous tasks)")
+                  : text("显示全部任务", "Show all tasks")}
+                title={text(
+                  "只看任务：仅显示用户提交与 Agent 自认领的任务",
+                  "Tasks only: user-submitted and agent-claimed tasks",
+                )}
+                onClick={() => setTasksOnly((current) => !current)}
+              >
+                <i className="tasks-only-toggle-track"><span /></i>
+                <span>{text("只看任务", "Tasks only")}</span>
+              </button>
+            )}
             {boardView === "issues" && (
               <button
                 className={`other-tasks-trigger${otherTasksOpen ? " is-open" : ""}`}
@@ -3542,6 +3624,19 @@ export function App() {
               </button>
             )}
           </div>}
+          <button
+            className="language-toggle"
+            type="button"
+            aria-label={language === "zh"
+              ? text("切换到英文", "Switch to English")
+              : text("切换到中文", "Switch to Chinese")}
+            title={text("切换语言", "Switch language")}
+            onClick={() => changeLanguage(language === "zh" ? "en" : "zh")}
+          >
+            <span className={language === "zh" ? "active" : ""}>中</span>
+            <span className="language-toggle-sep">/</span>
+            <span className={language === "en" ? "active" : ""}>EN</span>
+          </button>
         </div>}
 
         {(loadError || actionErrorText) && (
@@ -3670,6 +3765,16 @@ export function App() {
               onWorkflowsChange={setWorkflowOptions}
             />
           </Suspense>
+        ) : boardView === "squad" ? (
+          <div className="squad-view-shell">
+            <CollaborationPanel
+              projectId={selectedProjectId}
+              tasks={tasks}
+              onCreateTask={() => setEditor({ status: "todo", task: null })}
+              onRefresh={() => refreshTasks(selectedProjectId, { quiet: true })}
+              onError={setActionError}
+            />
+          </div>
         ) : (
           <div
             className={`issue-board-layout${otherTasksVisible ? " has-other-tasks" : ""}`}
@@ -3691,7 +3796,7 @@ export function App() {
               </div>
             ) : (
               <>
-                <div className="board-scroll" aria-label={text("议题看板", "Issue board")}>
+                <div className="board-scroll" ref={boardScrollRef} aria-label={text("议题看板", "Issue board")}>
                   <div className="board">
                     {mainStatuses.map((status) => (
                       <BoardColumn
@@ -3723,6 +3828,7 @@ export function App() {
                         onEdit={openTaskDetail}
                         onUpdate={updateTaskProperties}
                         onComplete={(task) => void moveTask(task, "done")}
+                        onClaim={claimTaskForExecution}
                         onContextMenu={(task, position) => setContextMenu({ taskId: task.id, ...position })}
                         onDragStart={startTaskDrag}
                         onDragEnd={endTaskDrag}

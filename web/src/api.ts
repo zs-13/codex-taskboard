@@ -530,9 +530,64 @@ export async function createSquad(input: {
   return data.squad;
 }
 
+export async function updateSquad(
+  squadId: string,
+  input: {
+    name?: string;
+    leaderAgentId?: string;
+    memberAgentIds?: string[];
+    skillTags?: string[];
+  },
+): Promise<Squad> {
+  const data = await request<{ squad: Squad }>(`/api/squads/${encodeURIComponent(squadId)}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return data.squad;
+}
+
 export async function listSkillTemplates(signal?: AbortSignal): Promise<SkillTemplate[]> {
   const data = await request<{ skills: SkillTemplate[] }>("/api/skills", { signal });
   return data.skills;
+}
+
+export interface CliTool {
+  name: string;
+  command: string;
+  path: string | null;
+  version: string | null;
+  installed: boolean;
+  authorized: boolean;
+  /** P0: tri-state login — installed & signed in / installed not signed in / not installed. */
+  signedIn: boolean | null;
+}
+
+/** v3.1 §4: local CLI tool detection. Gracefully degrades to [] when the
+ *  backend endpoint is not implemented yet (404/network). */
+export async function listCliTools(signal?: AbortSignal): Promise<CliTool[]> {
+  try {
+    const data = await request<{ tools: CliTool[] }>("/api/cli-tools", { signal });
+    return data.tools;
+  } catch (error) {
+    if ((error as { status?: number })?.status === 404) return [];
+    throw error;
+  }
+}
+
+export async function authorizeCliTool(name: string): Promise<CliTool> {
+  const data = await request<{ tool: CliTool }>(`/api/cli-tools/${encodeURIComponent(name)}/authorize`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return data.tool;
+}
+
+export async function revokeCliTool(name: string): Promise<CliTool> {
+  const data = await request<{ tool: CliTool }>(`/api/cli-tools/${encodeURIComponent(name)}/revoke`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+  return data.tool;
 }
 
 export async function createSkillTemplate(input: {
