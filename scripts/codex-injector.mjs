@@ -2,7 +2,9 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
+import { existsSync, readdirSync } from "node:fs";
 import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from "node:fs/promises";
+import os from "node:os";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -31,9 +33,18 @@ import {
 const injectorPath = fileURLToPath(import.meta.url);
 const projectRoot = path.resolve(path.dirname(injectorPath), "..");
 const defaultCodexDebuggingPort = 9229;
-const independentCodexProfilePath = process.env.CODEX_TASKBOARD_CODEX_PROFILE
-  ? path.resolve(process.env.CODEX_TASKBOARD_CODEX_PROFILE)
-  : "/private/tmp/codex-taskboard-independent-profile-v2";
+function defaultIndependentCodexProfilePath() {
+  if (process.env.CODEX_TASKBOARD_CODEX_PROFILE) {
+    return path.resolve(process.env.CODEX_TASKBOARD_CODEX_PROFILE);
+  }
+  if (process.platform === "win32") {
+    const localAppData = process.env.LOCALAPPDATA
+      ?? path.join(os.homedir(), "AppData", "Local");
+    return path.join(localAppData, "CodexTaskboard", "codex-profile");
+  }
+  return "/private/tmp/codex-taskboard-independent-profile-v2";
+}
+const independentCodexProfilePath = defaultIndependentCodexProfilePath();
 const sourceCodexProfilePath = process.env.CODEX_TASKBOARD_CODEX_SOURCE_PROFILE
   ? path.resolve(process.env.CODEX_TASKBOARD_CODEX_SOURCE_PROFILE)
   : null;
@@ -113,7 +124,7 @@ function parseArgs(argv) {
     startupToken: null,
     daemon: false,
     screenshot: null,
-    appPath: "/Applications/ChatGPT.app",
+    appPath: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -302,7 +313,79 @@ function codexExecutablePath(appPath) {
   );
 }
 
+// Resolve the Codex desktop app bundle/exe used for --launch on this platform.
+// - explicit: --app-path / CODEX_TASKBOARD_CODEX_APP_PATH
+// - win32:   scan WindowsApps for an OpenAI.Codex* package (ChatGPT.exe)
+// - darwin:  /Applications/ChatGPT.app (or Codex.app), else the default path
+function resolveCodexAppPath(explicit) {
+  if (typeof explicit === "string" && explicit.trim()) return path.resolve(explicit.trim());
+  if (process.platform === "win32") {
+    const explicitEnv = process.env.CODEX_TASKBOARD_CODEX_APP_PATH;
+    if (explicitEnv && explicitEnv.trim()) return path.resolve(explicitEnv.trim());
+    const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+    const windowsApps = path.join(programFiles, "WindowsApps");
+    if (existsSync(windowsApps)) {
+      try {
+        for (const entry of readdirSync(windowsApps)) {
+          if (!entry.startsWith("OpenAI.Codex")) continue;
+          const candidate = path.join(windowsApps, entry, "app", "ChatGPT.exe");
+          if (existsSync(candidate)) return candidate;
+        }
+      } catch {
+        // WindowsApps may be ACL-restricted to readdir; try PowerShell below.
+      }
+      // Node cannot always readdir the ACL-protected WindowsApps directory.
+      // Fall back to PowerShell Get-ChildItem (same scan the .ps1 launcher uses).
+      const scan = spawnSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-Command",
+          "Get-ChildItem 'C:\\Program Files\\WindowsApps' -Directory -Filter 'OpenAI.Codex*' -ErrorAction SilentlyContinue | ForEach-Object { Join-Path $_.FullName 'app\\ChatGPT.exe' } | Where-Object { Test-Path $_ } | Select-Object -First 1",
+        ],
+        {
+          encoding: "utf8",
+          env: withoutTaskboardLauncherEnvironment(process.env),
+          windowsHide: true,
+        },
+      );
+      const resolved = String(scan.stdout ?? "").trim().split("\n")[0];
+      if (resolved && existsSync(resolved)) return path.resolve(resolved);
+    }
+    // Last resort: read the path of a running ChatGPT.exe process (the app is
+    // normally already open). Works even when WindowsApps is ACL-restricted.
+    const running = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "Get-Process -Name ChatGPT -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Path",
+      ],
+      {
+        encoding: "utf8",
+        env: withoutTaskboardLauncherEnvironment(process.env),
+        windowsHide: true,
+      },
+    );
+    const runningPath = String(running.stdout ?? "").trim().split("\n")[0];
+    if (runningPath && existsSync(runningPath)) return path.resolve(runningPath);
+    return "ChatGPT.exe";
+  }
+  for (const applicationDirectory of ["/Applications", path.join(os.homedir(), "Applications")]) {
+    for (const applicationName of ["ChatGPT.app", "Codex.app"]) {
+      const candidate = path.join(applicationDirectory, applicationName);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return "/Applications/ChatGPT.app";
+}
+
 function managedCodexProcesses(appPath) {
+  if (process.platform === "win32") return windowsManagedCodexProcesses(appPath);
   const processes = spawnSync("/bin/ps", ["-ww", "-axo", "pid=,command="], {
     encoding: "utf8",
     env: withoutTaskboardLauncherEnvironment(process.env),
@@ -326,6 +409,51 @@ function managedCodexProcesses(appPath) {
   return matches;
 }
 
+// Windows: enumerate node.exe-owned ChatGPT.exe processes whose command line
+// carries the managed profile, using PowerShell (no /bin/ps on win32).
+function windowsManagedCodexProcesses(appPath) {
+  const script = [
+    "Get-CimInstance Win32_Process -Filter \"name='ChatGPT.exe'\" |",
+    "ForEach-Object {",
+    "  if ($_.CommandLine -match '--user-data-dir=') {",
+    "    '{0}|{1}' -f $_.ProcessId, $_.CommandLine",
+    "  }",
+    "}",
+  ].join(" ");
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script],
+    {
+      encoding: "utf8",
+      env: withoutTaskboardLauncherEnvironment(process.env),
+      maxBuffer: 4 * 1024 * 1024,
+      windowsHide: true,
+    },
+  );
+  if (result.status !== 0) throw new Error("Unable to inspect the launched Codex process");
+
+  const profileArgument = `--user-data-dir=${independentCodexProfilePath}`;
+  const matches = [];
+  for (const line of result.stdout.split("\n")) {
+    const separator = line.indexOf("|");
+    if (separator === -1) continue;
+    const pid = Number(line.slice(0, separator).trim());
+    const command = line.slice(separator + 1);
+    // Only the main browser process carries --user-data-dir without a --type=
+    // child-process marker; renderer/GPU/utility children all inherit the
+    // profile flag and would otherwise be counted as extra managed Codex
+    // instances.
+    if (
+      pid > 0
+      && command.includes(profileArgument)
+      && !command.includes(" --type=")
+    ) {
+      matches.push({ pid, command });
+    }
+  }
+  return matches;
+}
+
 function managedCodexProcess(appPath) {
   const processes = managedCodexProcesses(appPath);
   if (processes.length > 1) throw new Error("Multiple managed Codex processes are running");
@@ -337,6 +465,24 @@ function managedCodexUsesPort(record, port) {
 }
 
 function isManagedCodexRunning(record) {
+  if (process.platform === "win32") {
+    const result = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        `Get-Process -Id ${record.pid} -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id`,
+      ],
+      {
+        encoding: "utf8",
+        env: withoutTaskboardLauncherEnvironment(process.env),
+        windowsHide: true,
+      },
+    );
+    return result.status === 0 && result.stdout.trim() === String(record.pid);
+  }
   const result = spawnSync(
     "/bin/ps",
     ["-ww", "-p", String(record.pid), "-o", "command="],
@@ -358,30 +504,47 @@ async function launchCodexWithLaunchServices(appPath, port, shouldStop = () => f
   }
   if (shouldStop()) throw new Error("Managed Codex launch stopped");
 
-  const launcher = spawn(
-    "/usr/bin/open",
-    [
-      "-n",
-      "-a",
-      appPath,
-      "--args",
-      `--user-data-dir=${independentCodexProfilePath}`,
-      "--remote-debugging-address=127.0.0.1",
-      `--remote-debugging-port=${port}`,
-      `--remote-allow-origins=http://127.0.0.1:${port}`,
-    ],
-    {
+  const profileArgument = `--user-data-dir=${independentCodexProfilePath}`;
+  const cdpArgs = [
+    profileArgument,
+    "--remote-debugging-address=127.0.0.1",
+    `--remote-debugging-port=${port}`,
+    `--remote-allow-origins=http://127.0.0.1:${port}`,
+  ];
+
+  if (process.platform === "win32") {
+    const launcher = spawn(appPath, cdpArgs, {
       env: withoutTaskboardLauncherEnvironment(process.env),
       stdio: "ignore",
-    },
-  );
-  await new Promise((resolve, reject) => {
-    launcher.once("error", reject);
-    launcher.once("exit", (code, signal) => {
-      if (code === 0) resolve();
-      else reject(new Error(`LaunchServices failed to start Codex (${signal || code})`));
+      windowsHide: false,
     });
-  });
+    await new Promise((resolve, reject) => {
+      launcher.once("error", reject);
+      launcher.once("spawn", resolve);
+    });
+  } else {
+    const launcher = spawn(
+      "/usr/bin/open",
+      [
+        "-n",
+        "-a",
+        appPath,
+        "--args",
+        ...cdpArgs,
+      ],
+      {
+        env: withoutTaskboardLauncherEnvironment(process.env),
+        stdio: "ignore",
+      },
+    );
+    await new Promise((resolve, reject) => {
+      launcher.once("error", reject);
+      launcher.once("exit", (code, signal) => {
+        if (code === 0) resolve();
+        else reject(new Error(`LaunchServices failed to start Codex (${signal || code})`));
+      });
+    });
+  }
 
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -1928,6 +2091,7 @@ ${runtimeSource}`,
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   options.startupToken ??= taskboardInstanceToken;
+  options.appPath = resolveCodexAppPath(options.appPath);
   process.env.CODEX_EXECUTABLE = resolveCodexExecutable({ appPath: options.appPath });
   const cdpVersionUrl = `http://127.0.0.1:${options.port}/json/version`;
 

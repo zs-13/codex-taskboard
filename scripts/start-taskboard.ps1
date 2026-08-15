@@ -47,11 +47,13 @@ function Wait-HttpOk($url, $seconds) {
   return $false
 }
 
-function Has-NodeProcess($matchText) {
+function Has-NodeProcess($matchText, $portFilter = "") {
   $processes = Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction SilentlyContinue
   foreach ($process in $processes) {
     $commandLine = [string]$process.CommandLine
-    if ($commandLine.Contains($matchText)) { return $true }
+    if (-not $commandLine.Contains($matchText)) { continue }
+    if ($portFilter -and -not $commandLine.Contains("--port $portFilter")) { continue }
+    return $true
   }
   return $false
 }
@@ -116,7 +118,7 @@ if (-not (Test-HttpOk $cdpUrl)) {
 
 # 5. Run the injector (watch + open). Its supervisor starts the Taskboard
 #    service and writes .data/launcher-runtime.json.
-if (-not (Has-NodeProcess "scripts\codex-injector.mjs")) {
+if (-not (Has-NodeProcess "scripts\codex-injector.mjs" $Port)) {
   Write-Host "Starting Taskboard injector on port $Port ..."
   $injectorOut = Join-Path $logDir "injector.log"
   Start-Process -FilePath $node.Source -ArgumentList @(
