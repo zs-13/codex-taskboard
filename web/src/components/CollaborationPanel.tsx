@@ -131,28 +131,31 @@ export function CollaborationPanel({
   const squadCounts = taskCountForSquad(squads, selectableTasks);
 
   // Merge registered agents and detected CLI tools into one member-picker list.
+  // CLI tool ids are normalized to `cli-<tool>` to match the backend agent ids
+  // (the server registers authorized tools as agents named cli-<tool>). Tools
+  // that already have a cli-<tool> agent row are shown once, as CLI candidates.
   const toolCandidates: ToolCandidate[] = useMemo(() => {
-    const manual: ToolCandidate[] = agents.map((agent) => ({
-      id: agent.id,
-      name: toolName(agent),
-      kind: "manual" as const,
-      authorized: true,
-      installed: true,
-      signedIn: true,
-      skills: agent.skills,
-    }));
-    const manualIds = new Set(agents.map((agent) => agent.id));
-    const cli: ToolCandidate[] = cliTools
-      .filter((tool) => !manualIds.has(tool.name))
-      .map((tool) => ({
-        id: tool.name,
-        name: tool.name,
-        kind: "cli" as const,
-        authorized: tool.authorized,
-        installed: tool.installed,
-        signedIn: tool.signedIn,
-        skills: [],
+    const cliIds = new Set(cliTools.map((tool) => `cli-${tool.name}`));
+    const manual: ToolCandidate[] = agents
+      .filter((agent) => !cliIds.has(agent.id))
+      .map((agent) => ({
+        id: agent.id,
+        name: toolName(agent),
+        kind: "manual" as const,
+        authorized: true,
+        installed: true,
+        signedIn: true,
+        skills: agent.skills,
       }));
+    const cli: ToolCandidate[] = cliTools.map((tool) => ({
+      id: `cli-${tool.name}`,
+      name: tool.name,
+      kind: "cli" as const,
+      authorized: tool.authorized,
+      installed: tool.installed,
+      signedIn: tool.signedIn,
+      skills: [],
+    }));
     return [...cli, ...manual];
   }, [agents, cliTools]);
 
@@ -239,8 +242,14 @@ export function CollaborationPanel({
   function startWizard() {
     setSquadName("");
     setSquadTags("");
-    const firstEnabled = toolCandidates.find((candidate) => candidate.authorized) ?? toolCandidates[0];
-    setSquadLeaderId(firstEnabled?.id ?? "");
+    // Default leader: prefer the authorized claude runtime (cli-claude matches
+    // the backend agent id), then any enabled tool, then claude if present.
+    const defaultLeader =
+      toolCandidates.find((candidate) => candidate.id === "cli-claude" && candidate.authorized)
+      ?? toolCandidates.find((candidate) => candidate.authorized)
+      ?? toolCandidates.find((candidate) => candidate.id === "cli-claude")
+      ?? toolCandidates[0];
+    setSquadLeaderId(defaultLeader?.id ?? "");
     setSquadMemberIds([]);
     setWizardStep(1);
     setAdvancedOpen(false);
@@ -255,9 +264,17 @@ export function CollaborationPanel({
     ));
   }
 
+  function cliToolName(candidateId: string): string {
+    return candidateId.startsWith("cli-") ? candidateId.slice("cli-".length) : candidateId;
+  }
+
   function selectMember(candidate: ToolCandidate) {
+    if (!candidate.installed) {
+      showToast(text(`先安装 ${candidate.name} 再启用`, `Install ${candidate.name} first, then enable it`));
+      return;
+    }
     if (!candidate.authorized) {
-      const cliTool = cliTools.find((tool) => tool.name === candidate.id);
+      const cliTool = cliTools.find((tool) => tool.name === cliToolName(candidate.id));
       if (cliTool) {
         setPendingAuthorizeTool(cliTool);
         return;
@@ -271,9 +288,9 @@ export function CollaborationPanel({
     await run("authorize", async () => {
       const updated = await authorizeCliTool(tool.name);
       setCliTools((current) => current.map((entry) => entry.name === tool.name ? updated : entry));
-      const toolCandidate = toolCandidates.find((candidate) => candidate.id === tool.name);
-      if (toolCandidate && !squadMemberIds.includes(tool.name)) {
-        setSquadMemberIds((current) => [...current, tool.name]);
+      const toolId = `cli-${tool.name}`;
+      if (!squadMemberIds.includes(toolId)) {
+        setSquadMemberIds((current) => [...current, toolId]);
       }
     }, text("好，codex 可以开始干活了。", "OK, it can start working."));
   }
@@ -470,6 +487,7 @@ export function CollaborationPanel({
                                 type="button"
                                 className={`collab-member-option${selected ? " selected" : ""}${candidate.installed === false ? " is-missing" : ""}${candidate.authorized === false ? " is-unauthorized" : ""}`}
                                 aria-pressed={selected}
+                                title={candidate.installed === false ? text("未安装：先安装再启用", "Not installed: install it first") : undefined}
                                 onClick={() => selectMember(candidate)}
                               >
                                 {candidate.kind === "cli"
