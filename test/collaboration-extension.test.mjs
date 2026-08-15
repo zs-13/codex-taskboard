@@ -226,14 +226,6 @@ test("collaboration extension closes the local squad workflow loop", async () =>
   });
   assert.equal(skill.response.status, 201);
 
-  const command = await request(baseUrl, "/api/task-command", {
-    method: "POST",
-    body: { command: "/task new Build a thing" },
-  });
-  assert.equal(command.response.status, 200);
-  assert.equal(command.body.accepted, false);
-  assert.match(command.body.recommendation, /侧边任务面板/);
-
   const activity = await request(baseUrl, "/api/activity-log");
   assert.equal(activity.response.status, 200);
   assert.ok(activity.body.activities.some((entry) => entry.eventType === "squad.autonomous_step"));

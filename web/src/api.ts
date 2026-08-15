@@ -663,13 +663,6 @@ export async function runAutonomousSquadStep(task: Task): Promise<Task> {
   return data.task;
 }
 
-export async function submitTaskCommand(command: string): Promise<{ accepted: boolean; recommendation: string }> {
-  return request<{ accepted: boolean; recommendation: string }>("/api/task-command", {
-    method: "POST",
-    body: JSON.stringify({ command }),
-  });
-}
-
 export async function getTask(taskId: string, signal?: AbortSignal): Promise<Task> {
   const data = await request<{ task: Task }>(
     `/api/tasks/${encodeURIComponent(taskId)}`,

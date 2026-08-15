@@ -16,7 +16,6 @@ import {
   runAutonomousSquadStep,
   saveAgent,
   setTaskBlocked,
-  submitTaskCommand,
   updateSquad,
   type CliTool,
 } from "../api";
@@ -118,7 +117,6 @@ export function CollaborationPanel({
   const [assignModalTaskId, setAssignModalTaskId] = useState<string | null>(null);
   const [assignAgentId, setAssignAgentId] = useState("");
   const [assignSquadId, setAssignSquadId] = useState("");
-  const [command, setCommand] = useState("/task new");
   const activityListRef = useRef<HTMLOListElement>(null);
   const toastTimerRef = useRef<number | null>(null);
 
@@ -289,18 +287,6 @@ export function CollaborationPanel({
           <LinearIcon name="plus" />
           <span>{text("+ 新建任务", "+ New task")}</span>
         </button>
-        <button
-          className="button secondary"
-          type="button"
-          onClick={() => void run("command", async () => {
-            const result = await submitTaskCommand(command);
-            onError(result.recommendation);
-          })}
-        >
-          <LinearIcon name="write" />
-          <span>{text("/task new", "/task new")}</span>
-        </button>
-        <input value={command} onChange={(event) => setCommand(event.target.value)} aria-label="Task command" />
       </div>
 
       <div className="collab-panel-body">

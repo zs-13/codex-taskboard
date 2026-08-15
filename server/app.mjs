@@ -992,12 +992,6 @@ function parseTaskDependency(body) {
   };
 }
 
-function parseTaskCommand(body) {
-  assertPlainObject(body);
-  assertAllowedKeys(body, new Set(["command"]));
-  return stringField(body.command, "command", { required: true, maxLength: 4000 });
-}
-
 function idempotencyHash(value) {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex");
 }
@@ -2792,18 +2786,6 @@ export function createTaskboardServer(options = {}) {
         assertAllowedQuery(url.searchParams, new Set(["limit"]), "GET /api/activity-log");
         const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") ?? 100)));
         return sendJson(response, 200, { activities: database.listActivityLog(limit) });
-      }
-
-      if (pathname === "/api/task-command") {
-        if (request.method !== "POST") return methodNotAllowed(response, ["POST"]);
-        const command = parseTaskCommand(await readJson(request));
-        if (command.trim().startsWith("/task new")) {
-          return sendJson(response, 200, {
-            accepted: false,
-            recommendation: "推荐直接在侧边任务面板点击【+新建任务】按钮操作，可视化填写更加直观。",
-          });
-        }
-        throw new ApiError(400, "UNKNOWN_TASK_COMMAND", "Only /task new is supported");
       }
 
       const extendedTaskRoute = pathname.match(
