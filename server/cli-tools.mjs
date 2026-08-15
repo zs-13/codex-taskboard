@@ -121,6 +121,8 @@ function pathDirectories(env = process.env) {
       path.join(appData, "npm"),
       path.join(home, ".local", "bin"),
       path.join(programFiles, "nodejs"),
+      path.join(programFiles, "Git", "cmd"),
+      path.join(programFiles, "Git", "bin"),
       path.join(home, "scoop", "shims"),
       path.join(localAppData, "Microsoft", "WindowsApps"),
     ]) {
