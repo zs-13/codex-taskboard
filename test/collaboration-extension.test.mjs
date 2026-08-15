@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, test } from "node:test";
@@ -7,8 +7,12 @@ import { afterEach, test } from "node:test";
 import { createTaskboardServer } from "../server/index.mjs";
 
 const runningApps = [];
+const temporaryDirectories = [];
 
 afterEach(async () => {
+  while (temporaryDirectories.length > 0) {
+    await rm(temporaryDirectories.pop(), { recursive: true, force: true });
+  }
   while (runningApps.length > 0) {
     const { app, directory } = runningApps.pop();
     await app.close();
@@ -16,9 +20,9 @@ afterEach(async () => {
   }
 });
 
-async function startServer() {
+async function startServer(options = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "codex-taskboard-collab-"));
-  const app = createTaskboardServer({ dataDirectory: directory });
+  const app = createTaskboardServer({ dataDirectory: directory, ...options });
   const address = await app.listen({ port: 0 });
   runningApps.push({ app, directory });
   return `http://127.0.0.1:${address.port}`;
@@ -296,7 +300,16 @@ test("terminal task states release the execution lock", async () => {
 });
 
 test("createSquad auto-registers a known CLI tool member", async () => {
-  const baseUrl = await startServer();
+  // Use a deterministic fake CLI tool instead of relying on a real one like
+  // git being found on the runner PATH (Windows CI PATH can be unreliable;
+  // on windows-2025 it has been observed to rearrange between steps). The
+  // scan finds the fake executable on both POSIX and Windows (no extension),
+  // so the auto-registration path is exercised without host dependence.
+  const fakeDir = await mkdtemp(path.join(os.tmpdir(), "codex-taskboard-fakebin-"));
+  temporaryDirectories.push(fakeDir);
+  await writeFile(path.join(fakeDir, "fakecli"), "#!/bin/sh\necho fake-cli 1.2.3\n", "utf8");
+
+  const baseUrl = await startServer({ cliToolNames: ["fakecli"], cliToolPath: fakeDir });
   // A leader that exists.
   await request(baseUrl, "/api/agents", {
     method: "POST",
@@ -305,6 +318,9 @@ test("createSquad auto-registers a known CLI tool member", async () => {
   // Seed a known CLI tool (unauthorized, no cli-* agent row yet).
   const seed = await request(baseUrl, "/api/cli-tools", { method: "GET" });
   assert.equal(seed.response.status, 200);
+  const seededFake = seed.body.tools.find((tool) => tool.name === "fakecli");
+  assert.ok(seededFake, "fakecli should be scanned");
+  assert.equal(seededFake.installed, true, "fakecli should be detected as installed");
 
   // createSquad with a cli-<tool> member that has no agent row: the backend
   // auto-registers it (known installed CLI tool) instead of 404.
@@ -313,16 +329,16 @@ test("createSquad auto-registers a known CLI tool member", async () => {
     body: {
       name: "CLI Tool Squad",
       leaderAgentId: "builder",
-      memberAgentIds: ["cli-git"],
+      memberAgentIds: ["cli-fakecli"],
       skillTags: [],
     },
   });
   assert.equal(squad.response.status, 201);
-  assert.ok(squad.body.squad.members.some((m) => m.agentId === "cli-git"));
+  assert.ok(squad.body.squad.members.some((m) => m.agentId === "cli-fakecli"));
 
   const agents = await request(baseUrl, "/api/agents");
-  const cliAgent = agents.body.agents.find((a) => a.id === "cli-git");
-  assert.ok(cliAgent, "cli-git agent should be auto-registered");
+  const cliAgent = agents.body.agents.find((a) => a.id === "cli-fakecli");
+  assert.ok(cliAgent, "cli-fakecli agent should be auto-registered");
   assert.equal(cliAgent.source, "cli");
 
   // DELETE endpoint removes the squad.
