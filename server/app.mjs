@@ -2748,8 +2748,13 @@ export function createTaskboardServer(options = {}) {
 
       const squadUpdateRoute = pathname.match(/^\/api\/squads\/([^/]+)$/);
       if (squadUpdateRoute) {
-        if (request.method !== "PATCH") return methodNotAllowed(response, ["PATCH"]);
         const squadId = decodeRouteSegment(squadUpdateRoute[1], "Squad id");
+        if (request.method === "DELETE") {
+          const deleted = database.deleteSquad(squadId, actorFromRequest(request));
+          events.emit("squad.deleted", { squadId });
+          return sendEmpty(response, 204);
+        }
+        if (request.method !== "PATCH") return methodNotAllowed(response, ["PATCH", "DELETE"]);
         const input = parseSquadUpdate(await readJson(request));
         if (
           input.name === undefined

@@ -294,3 +294,40 @@ test("terminal task states release the execution lock", async () => {
   assert.equal(activeTask.body.task.status, "in_progress");
   assert.equal(activeTask.body.task.lockOwner, "builder");
 });
+
+test("createSquad auto-registers a known CLI tool member", async () => {
+  const baseUrl = await startServer();
+  // A leader that exists.
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+  });
+  // Seed a known CLI tool (unauthorized, no cli-* agent row yet).
+  const seed = await request(baseUrl, "/api/cli-tools", { method: "GET" });
+  assert.equal(seed.response.status, 200);
+
+  // createSquad with a cli-<tool> member that has no agent row: the backend
+  // auto-registers it (known installed CLI tool) instead of 404.
+  const squad = await request(baseUrl, "/api/squads", {
+    method: "POST",
+    body: {
+      name: "CLI Tool Squad",
+      leaderAgentId: "builder",
+      memberAgentIds: ["cli-git"],
+      skillTags: [],
+    },
+  });
+  assert.equal(squad.response.status, 201);
+  assert.ok(squad.body.squad.members.some((m) => m.agentId === "cli-git"));
+
+  const agents = await request(baseUrl, "/api/agents");
+  const cliAgent = agents.body.agents.find((a) => a.id === "cli-git");
+  assert.ok(cliAgent, "cli-git agent should be auto-registered");
+  assert.equal(cliAgent.source, "cli");
+
+  // DELETE endpoint removes the squad.
+  const del = await request(baseUrl, `/api/squads/${squad.body.squad.id}`, { method: "DELETE" });
+  assert.equal(del.response.status, 204);
+  const after = await request(baseUrl, "/api/squads");
+  assert.ok(!after.body.squads.some((s) => s.id === squad.body.squad.id));
+});
