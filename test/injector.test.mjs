@@ -229,6 +229,14 @@ test("the injector ignores auxiliary Codex windows", () => {
   assert.match(source, /!target\.url\?\.includes\("initialRoute=%2Fglobal-dictation"\)/);
 });
 
+test("the injector re-attaches when a debuggable Codex reappears after a normal exit", () => {
+  assert.match(source, /idleAfterNormalExit/);
+  assert.match(source, /const reappeared = await isReachable\(cdpVersionUrl\)/);
+  assert.match(source, /if \(!reappeared\) continue/);
+  assert.match(source, /cdpRuntime = tcpCdpRuntime\(options\.port\)/);
+  assert.match(source, /idleAfterNormalExit = false/);
+});
+
 test("a completed web build refreshes an already-open Codex iframe", () => {
   assert.match(packageJson.scripts.build, /--refresh-if-running/);
   assert.match(packageJson.scripts["codex:refresh"], /--refresh/);
