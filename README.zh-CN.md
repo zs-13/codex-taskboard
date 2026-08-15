@@ -40,7 +40,7 @@ cd codex-taskboard
 npm run codex
 ```
 
-**直接在 Codex 中打开：** 仓库内置了一个 Codex 环境动作（`启动`，定义在 `.codex/environments/environment.toml`），对应 `npm run codex`。在 Codex App 中打开克隆的文件夹并点击该动作即可启动面板。
+**直接在 Codex 中打开：** 仓库内置了一个 Codex 环境动作（`启动`，定义在 `.codex/environments/environment.toml`），会按平台分发到对应的启动脚本（`scripts/codex-launch.mjs`）。在 Codex App 中打开克隆的文件夹并点击该动作即可启动面板。
 
 > Windows 使用 CDP 端口 `9232`，macOS 使用 `9231`。如果端口被占用，可以覆盖：`scripts\start-taskboard.ps1 -Port 9231` 或 `CODEX_TASKBOARD_PORT=9231 ./scripts/start-taskboard.sh`。
 

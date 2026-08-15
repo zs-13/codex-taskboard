@@ -40,7 +40,7 @@ Or use the built-in Codex action (`npm run codex`) which does the same on macOS:
 npm run codex
 ```
 
-**Open in Codex directly:** the repository ships a Codex environment action (`启动` / "Launch", in `.codex/environments/environment.toml`) wired to `npm run codex`. Open the cloned folder in the Codex app and click the action to start the panel.
+**Open in Codex directly:** the repository ships a Codex environment action (`启动` / "Launch", in `.codex/environments/environment.toml`) that dispatches to the platform launcher (`scripts/codex-launch.mjs`). Open the cloned folder in the Codex app and click the action to start the panel.
 
 > Windows uses CDP port `9232`, macOS uses `9231`. If a port is taken, override it: `scripts\start-taskboard.ps1 -Port 9231` or `CODEX_TASKBOARD_PORT=9231 ./scripts/start-taskboard.sh`.
 

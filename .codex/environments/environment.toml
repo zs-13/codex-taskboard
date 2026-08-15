@@ -8,4 +8,4 @@ script = ""
 [[actions]]
 name = "启动"
 icon = "run"
-command = "npm run codex"
+command = "node scripts/codex-launch.mjs"
