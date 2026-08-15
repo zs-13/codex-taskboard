@@ -405,6 +405,29 @@ test("startTurn revalidates the latest danger sandbox and persisted model settin
   }
 });
 
+test("missing Codex CLI reports a readable error instead of a raw crash", async () => {
+  const fixture = await createFixture();
+  try {
+    const missing = new AiChatService({
+      database: fixture.database,
+      codexExecutable: path.join(fixture.directory, "does-not-exist-codex"),
+      codexStatePath: path.join(fixture.directory, "codex-state.json"),
+      manageTaskboardSkillPath: "/fixture/manage-taskboard/SKILL.md",
+      killGraceMs: 50,
+    });
+    await assert.rejects(
+      missing.createThread({ projectId: "project" }),
+      (error) => (
+        error.code === "CODEX_CLI_NOT_FOUND"
+        && /Codex CLI 不可用/.test(error.message)
+      ),
+    );
+    await missing.close();
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("startup marks abandoned runs interrupted while preserving the Codex thread id", async () => {
   const fixture = await createFixture();
   const thread = await fixture.service.createThread({ projectId: "project" });

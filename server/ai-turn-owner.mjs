@@ -29,7 +29,10 @@ control.once("error", terminateGroup);
 control.resume();
 
 child.once("error", (error) => {
-  process.stderr.write(`${error.message}\n`);
+  const detail = error.code === "ENOENT"
+    ? "Codex CLI was not found on this machine"
+    : error.message;
+  process.stderr.write(`${detail}\n`);
   process.exit(1);
 });
 child.once("exit", (code, signal) => {

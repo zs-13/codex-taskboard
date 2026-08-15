@@ -408,3 +408,32 @@ test("server close stops accepting requests before AI shutdown completes", async
     }
   }
 });
+
+test("catalog returns a readable 503 when the Codex CLI is missing", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "taskboard-ai-server-"));
+  const workspacePath = path.join(directory, "workspace");
+  await mkdir(workspacePath);
+  const codexStatePath = path.join(directory, "codex-state.json");
+  await writeFile(codexStatePath, JSON.stringify({
+    "local-projects": { local: { rootPaths: [workspacePath] } },
+  }));
+  const app = createTaskboardServer({
+    dataDirectory: directory,
+    codexExecutable: path.join(directory, "does-not-exist-codex"),
+    codexStatePath,
+    skillPath: "/fixture/manage-taskboard/SKILL.md",
+  });
+  const address = await app.listen({ host: "127.0.0.1", port: 0 });
+  try {
+    const catalog = await request(
+      `http://127.0.0.1:${address.port}`,
+      "/api/local/ai/catalog?projectId=local",
+    );
+    assert.equal(catalog.response.status, 503);
+    assert.equal(catalog.body.error.code, "CODEX_CLI_NOT_FOUND");
+    assert.match(catalog.body.error.message, /Codex CLI 不可用/);
+  } finally {
+    await app.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
