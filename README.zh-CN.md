@@ -60,6 +60,8 @@ npm run codex
 
 **直接在 Codex 中打开：** 仓库内置了一个 Codex 环境动作（`启动`，定义在 `.codex/environments/environment.toml`），会按平台分发到对应的启动脚本（`scripts/codex-launch.mjs`）。在 Codex App 中打开克隆的文件夹并点击该动作即可启动面板。
 
+> **Windows 一键设置（可选）：** 克隆后运行 `scripts\setup-taskboard-autostart.ps1`，会创建「Codex Taskboard」桌面快捷方式并注册常驻注入器的开机自启。之后双击该快捷方式即可打开面板，无需终端。可规避的坑见[让侧边栏面板一直可用](#让侧边栏面板一直可用避开这些坑)。
+
 ## 安装为原生 Codex 插件
 
 本仓库已按 **Codex 插件** 格式打包（`.codex-plugin/plugin.json` + 仓库级 marketplace `.agents/plugins/marketplace.json`），可以从 GitHub 链接导入，并在 Codex 的 Plugins 侧边栏中出现。自带的 `manage-taskboard` skill 会成为 Codex 智能体可用的能力。
@@ -243,6 +245,20 @@ npm run codex:inject -- --port 9229 --open
 “在对话中打开”会在可用时选择对应的原生 Codex 项目，并打开一个未发送的原生 composer，其中包含 `e-taskboard` 指令和议题的真实标识符。已安装的 Skill 会根据该指令隐式选中，因此 composer 不会添加 `$manage-taskboard` 提及。只有在会话实际处理该议题后，才会记录该会话的归属关系：`taskctl` 读取 Codex 的 `CODEX_THREAD_ID`，并在议题或评论变更上记录该 ID。记录的 ID 可通过 Codex 的原生路由桥接点击。每个议题可以绑定一个 Git 分支或一个 worktree；选项从所选 Codex 项目的仓库扫描，而不是手动输入。该集成使用 Codex 现有的项目、composer 和路由标记；它不会修改 React、替换 `fetch`、加载私有 chunk 或编辑 Codex 数据文件。
 
 要使用不同的 UI 来源，请在用户脚本运行前设置 `window.__CODEX_TASKBOARD_URL__`。
+
+## 让侧边栏面板一直可用（避开这些坑）
+
+侧边栏面板**不是 Codex 原生插件面板**——Codex 的插件格式只覆盖 skills/MCP，不支持第三方嵌入侧边栏。面板是注入器通过 Chrome DevTools 协议（CDP）注入到「启动器用 `--remote-debugging-port` 参数拉起的 Codex 窗口」里的。下面是最常踩的坑和规避方法：
+
+1. **用启动器打开 Codex，不要用应用图标。** 从开始菜单/图标正常打开的 Codex 窗口不会启用 CDP，注入器挂不上去，面板不会出现。请始终用 `scripts\start-taskboard.bat`（Windows）或 `./scripts/start-taskboard.sh` / `npm run codex`（macOS）打开带面板的 Codex 窗口。
+
+2. **关闭再打开 Codex 会清掉面板。** 面板活在 Codex 窗口内部，重启窗口就会消失。常驻注入器会在同一端口上检测到带调试端口的 Codex 重新出现时自动重新注入——只要用启动器重新打开 Codex，面板就会自己回来。
+
+3. **只跑一个 Taskboard。** 不要每次换一个 CDP 端口启动。每换一个端口/配置，就会多出一个 Codex 窗口、一个注入器、一个服务，且各自使用独立的 `.data\taskboard.sqlite`，历史任务在不同实例之间会「看起来丢失」。请固定使用一个端口（Windows `9232`、macOS `9231`）。启动器是幂等的——重复运行只会复用已在运行的服务、注入器和 Codex，不会重复拉起。
+
+4. **服务有意比 Codex 活得更久。** 关掉 Codex 后服务和 agent runner 仍在后台运行，这正是实时任务进度和历史记录能持续的原因。关闭 Codex 不会删除任务。要彻底停止，请结束服务/注入器/agent runner 进程，或禁用开机自启。
+
+5. **Windows 一键设置（可选）。** 运行 `scripts\setup-taskboard-autostart.ps1` 会创建「Codex Taskboard」桌面快捷方式（固定端口启动器）并注册常驻注入器的开机自启，安装后双击即可打开面板，重启电脑也能自动就绪。
 
 ## 配置
 

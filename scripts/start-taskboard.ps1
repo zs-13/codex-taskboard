@@ -118,6 +118,21 @@ if (-not (Test-HttpOk $cdpUrl)) {
 
 # 5. Run the injector (watch + open). Its supervisor starts the Taskboard
 #    service and writes .data/launcher-runtime.json.
+$otherInjectorPort = $null
+$injectorProcesses = Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction SilentlyContinue
+foreach ($injectorProcess in $injectorProcesses) {
+  $injectorCommand = [string]$injectorProcess.CommandLine
+  if (-not $injectorCommand.Contains("scripts\codex-injector.mjs")) { continue }
+  if ($injectorCommand.Contains("--port $Port")) { continue }
+  $otherInjectorPort = "unknown"
+  if ($injectorCommand -match "--port (\d+)") { $otherInjectorPort = $Matches[1] }
+  break
+}
+if ($otherInjectorPort) {
+  Write-Warning "Another Taskboard injector is already running on CDP port $otherInjectorPort."
+  Write-Warning "Run exactly ONE Taskboard: each port creates a separate Codex window, service,"
+  Write-Warning "and SQLite database, splitting task history. Reuse the same port or close the other instance."
+}
 if (-not (Has-NodeProcess "scripts\codex-injector.mjs" $Port)) {
   Write-Host "Starting Taskboard injector on port $Port ..."
   $injectorOut = Join-Path $logDir "injector.log"
