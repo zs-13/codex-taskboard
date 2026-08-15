@@ -42,6 +42,36 @@ npm run codex
 
 **直接在 Codex 中打开：** 仓库内置了一个 Codex 环境动作（`启动`，定义在 `.codex/environments/environment.toml`），会按平台分发到对应的启动脚本（`scripts/codex-launch.mjs`）。在 Codex App 中打开克隆的文件夹并点击该动作即可启动面板。
 
+## 安装为原生 Codex 插件
+
+本仓库已按 **Codex 插件** 格式打包（`.codex-plugin/plugin.json` + 仓库级 marketplace `.agents/plugins/marketplace.json`），可以从 GitHub 链接导入，并在 Codex 的 Plugins 侧边栏中出现。自带的 `manage-taskboard` skill 会成为 Codex 智能体可用的能力。
+
+**方式 A — 官方 CLI（最快）：**
+
+```bash
+codex plugin marketplace add zs-13/codex-taskboard
+codex plugin install codex-taskboard@codex-taskboard
+```
+
+重启 Codex App 后，插件出现在 **Plugins** 下。面板单独用 `npm run codex`（或 `启动` 动作）启动。
+
+**方式 B — 仓库自带安装器（无需 CLI）：**
+
+```bash
+# Windows
+scripts\install-codex-plugin.bat
+
+# macOS
+./scripts/install-codex-plugin.sh
+
+# 或在 Codex 中打开文件夹后点击环境动作「安装为 Codex 插件」
+npm run codex:plugin:install
+```
+
+这会在 `~/.agents/plugins/marketplace.json` 注册一个个人 marketplace 指向本插件，重启 Codex 后即可从 **Plugins > Local Plugins** 一键安装。
+
+> 说明：Codex 插件格式覆盖 skill/MCP/app；任务面板的可交互**侧边栏**仍由 CDP 注入器（`npm run codex` / `scripts/start-taskboard.*`）渲染，插件的 skill 会指导 Codex 去启动它。插件让仓库成为 Codex 的一等扩展、可被发现并安装。
+
 > Windows 使用 CDP 端口 `9232`，macOS 使用 `9231`。如果端口被占用，可以覆盖：`scripts\start-taskboard.ps1 -Port 9231` 或 `CODEX_TASKBOARD_PORT=9231 ./scripts/start-taskboard.sh`。
 
 ## 系统要求

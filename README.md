@@ -42,6 +42,36 @@ npm run codex
 
 **Open in Codex directly:** the repository ships a Codex environment action (`启动` / "Launch", in `.codex/environments/environment.toml`) that dispatches to the platform launcher (`scripts/codex-launch.mjs`). Open the cloned folder in the Codex app and click the action to start the panel.
 
+## Install as a native Codex plugin
+
+This repository is packaged as a **Codex plugin** (`.codex-plugin/plugin.json` + repo-scoped marketplace `.agents/plugins/marketplace.json`), so Codex can install it from the GitHub link and show it in the Plugins sidebar. The bundled `manage-taskboard` skill becomes available to Codex agents.
+
+**Option A — official CLI (fastest):**
+
+```bash
+codex plugin marketplace add zs-13/codex-taskboard
+codex plugin install codex-taskboard@codex-taskboard
+```
+
+Then restart the Codex app and the plugin appears under **Plugins**. The panel is launched separately with `npm run codex` (or the `启动` action).
+
+**Option B — repo installer (no CLI needed):**
+
+```bash
+# Windows
+scripts\install-codex-plugin.bat
+
+# macOS
+./scripts/install-codex-plugin.sh
+
+# or the Codex environment action "安装为 Codex 插件" after opening the folder
+npm run codex:plugin:install
+```
+
+This registers a personal marketplace at `~/.agents/plugins/marketplace.json` pointing at the plugin, then you restart Codex and install from **Plugins > Local Plugins**.
+
+> Note: the Codex plugin format covers skills/MCP/apps. The Taskboard's interactive **sidebar panel** is rendered by the CDP injector (`npm run codex` / `scripts/start-taskboard.*`), which the plugin's skill instructs Codex to launch. The plugin makes the repository discoverable and installable as a first-class Codex extension.
+
 > Windows uses CDP port `9232`, macOS uses `9231`. If a port is taken, override it: `scripts\start-taskboard.ps1 -Port 9231` or `CODEX_TASKBOARD_PORT=9231 ./scripts/start-taskboard.sh`.
 
 ## Requirements

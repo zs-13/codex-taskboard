@@ -1,0 +1,44 @@
+{
+  "name": "codex-taskboard",
+  "version": "1.0.0",
+  "description": "Local-first issue board that runs in a browser and can be embedded in Codex as a sidebar panel. Installs the manage-taskboard skill so Codex agents can claim, execute, and track issues with taskctl.",
+  "author": {
+    "name": "zs-13",
+    "url": "https://github.com/zs-13"
+  },
+  "homepage": "https://github.com/zs-13/codex-taskboard",
+  "repository": "https://github.com/zs-13/codex-taskboard",
+  "license": "Apache-2.0",
+  "keywords": [
+    "taskboard",
+    "issue-tracker",
+    "kanban",
+    "codex",
+    "task-management",
+    "project-management"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Codex Taskboard",
+    "shortDescription": "Issue board with agent claiming and execution",
+    "longDescription": "Codex Taskboard is a local-first issue board that runs in a browser and can be embedded in Codex as a sidebar panel. The bundled manage-taskboard skill teaches Codex to use the taskctl CLI to create, claim, execute, verify, and close issues. Launch the panel with the 启动 action (npm run codex) or scripts/start-taskboard.",
+    "developerName": "zs-13",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/zs-13/codex-taskboard",
+    "privacyPolicyURL": "https://github.com/zs-13/codex-taskboard/blob/main/PRIVACY.md",
+    "termsOfServiceURL": "https://github.com/zs-13/codex-taskboard/blob/main/LICENSE",
+    "defaultPrompt": [
+      "Open the Taskboard and show me the current issues",
+      "Use taskctl to list my open tasks and claim the next one",
+      "Create a task for this request on the Taskboard"
+    ],
+    "brandColor": "#0C79D8",
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/logo.svg",
+    "screenshots": []
+  }
+}

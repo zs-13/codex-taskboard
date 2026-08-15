@@ -12,6 +12,7 @@
   "scripts": {
     "codex": "node scripts/codex-injector.mjs --launch --watch --open --port 9231",
     "codex:windows": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-taskboard.ps1",
+    "codex:plugin:install": "node scripts/codex-plugin-install.mjs",
     "codex:inject": "node scripts/codex-injector.mjs --watch",
     "codex:daemon": "node scripts/codex-injector.mjs --daemon --open",
     "codex:refresh": "node scripts/codex-injector.mjs --refresh",

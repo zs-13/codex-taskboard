@@ -1,5 +1,27 @@
 # Codex Taskboard — agent notes
 
+## Native Codex plugin
+
+This repository is a valid **Codex plugin**:
+
+- Plugin manifest: `.codex-plugin/plugin.json`
+- Repo-scoped marketplace: `.agents/plugins/marketplace.json`
+- Bundled skill: `skills/manage-taskboard`
+
+To register it as a native plugin from the app or CLI:
+
+```bash
+codex plugin marketplace add zs-13/codex-taskboard
+codex plugin install codex-taskboard@codex-taskboard
+```
+
+or run the repo's own installer (`npm run codex:plugin:install`, or
+`scripts/install-codex-plugin.bat` / `.sh`) which registers a personal
+marketplace at `~/.agents/plugins/marketplace.json` when the CLI is absent.
+After restarting Codex, the plugin appears under **Plugins > Local Plugins**,
+installs with one click, and its `manage-taskboard` skill becomes available.
+The sidebar panel itself is still rendered by the CDP injector (`npm run codex`).
+
 ## Running the Taskboard
 
 - **Windows:** `scripts\start-taskboard.bat` or `npm run codex:windows` — launches the Codex app on CDP port `9232`, starts the local service, injects the panel, and runs the agent runner.

@@ -9,3 +9,8 @@ script = ""
 name = "启动"
 icon = "run"
 command = "node scripts/codex-launch.mjs"
+
+[[actions]]
+name = "安装为 Codex 插件"
+icon = "download"
+command = "node scripts/codex-plugin-install.mjs"
