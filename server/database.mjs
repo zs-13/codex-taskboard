@@ -851,7 +851,19 @@ export class TaskboardDatabase {
         skills TEXT NOT NULL DEFAULT '[]',
         workspace_path TEXT,
         avatar_url TEXT,
+        source TEXT NOT NULL DEFAULT 'manual',
+        authorized INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS cli_tools (
+        name TEXT PRIMARY KEY,
+        command TEXT NOT NULL,
+        path TEXT,
+        version TEXT,
+        installed INTEGER NOT NULL DEFAULT 0,
+        authorized INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
 
@@ -939,6 +951,14 @@ export class TaskboardDatabase {
       CREATE INDEX IF NOT EXISTS codex_session_notifications_target_created
         ON codex_session_notifications(target_session_id, created_at DESC);
     `);
+
+    const agentColumns = this.database.prepare("PRAGMA table_info(agents)").all();
+    if (!agentColumns.some((column) => column.name === "source")) {
+      this.database.exec("ALTER TABLE agents ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'");
+    }
+    if (!agentColumns.some((column) => column.name === "authorized")) {
+      this.database.exec("ALTER TABLE agents ADD COLUMN authorized INTEGER NOT NULL DEFAULT 0");
+    }
 
     const idempotencyColumns = this.database.prepare("PRAGMA table_info(idempotency_keys)").all();
     if (!idempotencyColumns.some((candidate) => candidate.name === "request_hash")) {
@@ -2326,6 +2346,8 @@ export class TaskboardDatabase {
       skills: JSON.parse(row.skills),
       workspacePath: row.workspace_path,
       avatarUrl: row.avatar_url,
+      source: row.source ?? "manual",
+      authorized: Boolean(row.authorized),
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -2335,15 +2357,27 @@ export class TaskboardDatabase {
     const timestamp = now();
     const id = input.id || randomUUID();
     this.database.prepare(`
-      INSERT INTO agents (id, name, skills, workspace_path, avatar_url, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO agents (id, name, skills, workspace_path, avatar_url, source, authorized, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         name = excluded.name,
         skills = excluded.skills,
         workspace_path = excluded.workspace_path,
         avatar_url = excluded.avatar_url,
+        source = excluded.source,
+        authorized = excluded.authorized,
         updated_at = excluded.updated_at
-    `).run(id, input.name, JSON.stringify(input.skills), input.workspacePath, input.avatarUrl, timestamp, timestamp);
+    `).run(
+      id,
+      input.name,
+      JSON.stringify(input.skills),
+      input.workspacePath,
+      input.avatarUrl,
+      input.source ?? "manual",
+      input.authorized ? 1 : 0,
+      timestamp,
+      timestamp,
+    );
     const agent = this.listAgents().find((candidate) => candidate.id === id);
     this.recordActivity({
       projectId: null,
@@ -2354,6 +2388,70 @@ export class TaskboardDatabase {
       payload: { agentId: id },
     });
     return agent;
+  }
+
+  listCliTools() {
+    return this.database.prepare(`
+      SELECT * FROM cli_tools ORDER BY name
+    `).all().map((row) => ({
+      name: row.name,
+      command: row.command,
+      path: row.path,
+      version: row.version,
+      installed: Boolean(row.installed),
+      authorized: Boolean(row.authorized),
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  upsertCliTool(tool, actor) {
+    const timestamp = now();
+    this.database.prepare(`
+      INSERT INTO cli_tools (name, command, path, version, installed, authorized, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(name) DO UPDATE SET
+        command = excluded.command,
+        path = excluded.path,
+        version = excluded.version,
+        installed = excluded.installed,
+        updated_at = excluded.updated_at
+    `).run(
+      tool.name,
+      tool.command,
+      tool.path,
+      tool.version,
+      tool.installed ? 1 : 0,
+      tool.authorized ? 1 : 0,
+      timestamp,
+    );
+    const record = this.listCliTools().find((candidate) => candidate.name === tool.name);
+    this.recordActivity({
+      projectId: null,
+      taskId: null,
+      actor,
+      eventType: "cli_tool.updated",
+      message: `CLI tool ${tool.name} ${tool.installed ? "detected" : "not found"}`,
+      payload: { toolName: tool.name },
+    });
+    return record;
+  }
+
+  setCliToolAuthorized(name, authorized, actor) {
+    const timestamp = now();
+    const existing = this.database.prepare("SELECT * FROM cli_tools WHERE name = ?").get(name);
+    if (!existing) throw new ApiError(404, "CLI_TOOL_NOT_FOUND", `CLI tool '${name}' is not registered`);
+    this.database.prepare(`
+      UPDATE cli_tools SET authorized = ?, updated_at = ? WHERE name = ?
+    `).run(authorized ? 1 : 0, timestamp, name);
+    this.recordActivity({
+      projectId: null,
+      taskId: null,
+      actor,
+      eventType: "cli_tool.authorization",
+      message: `CLI tool ${name} ${authorized ? "authorized" : "revoked"}`,
+      payload: { toolName: name, authorized },
+    });
+    return this.listCliTools().find((candidate) => candidate.name === name);
   }
 
   listSquads() {
@@ -2426,8 +2524,57 @@ export class TaskboardDatabase {
     return squad;
   }
 
-  listSkillTemplates() {
-    return this.database.prepare(`
+  updateSquad(id, input, actor) {
+    const timestamp = now();
+    const existing = this.database.prepare("SELECT id, name, leader_agent_id, skill_tags FROM squads WHERE id = ?").get(id);
+    if (!existing) throw new ApiError(404, "SQUAD_NOT_FOUND", `Squad '${id}' does not exist`);
+    if (input.leaderAgentId !== undefined) {
+      const leader = this.database.prepare("SELECT id FROM agents WHERE id = ?").get(input.leaderAgentId);
+      if (!leader) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${input.leaderAgentId}' does not exist`);
+    }
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.database.prepare(`
+        UPDATE squads
+        SET name = ?, leader_agent_id = ?, skill_tags = ?, updated_at = ?
+        WHERE id = ?
+      `).run(
+        input.name ?? existing.name,
+        input.leaderAgentId ?? existing.leader_agent_id,
+        JSON.stringify(input.skillTags ?? JSON.parse(existing.skill_tags)),
+        timestamp,
+        id,
+      );
+      if (input.memberAgentIds !== undefined) {
+        const memberIds = [...new Set([input.leaderAgentId ?? existing.leader_agent_id, ...input.memberAgentIds])];
+        this.database.prepare("DELETE FROM squad_members WHERE squad_id = ?").run(id);
+        for (const agentId of memberIds) {
+          const agent = this.database.prepare("SELECT id FROM agents WHERE id = ?").get(agentId);
+          if (!agent) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${agentId}' does not exist`);
+          this.database.prepare(`
+            INSERT INTO squad_members (squad_id, agent_id, role, created_at)
+            VALUES (?, ?, ?, ?)
+          `).run(id, agentId, agentId === (input.leaderAgentId ?? existing.leader_agent_id) ? "leader" : "member", timestamp);
+        }
+      }
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+    const squad = this.listSquads().find((candidate) => candidate.id === id);
+    this.recordActivity({
+      projectId: null,
+      taskId: null,
+      actor,
+      eventType: "squad.updated",
+      message: `Squad ${squad.name} updated`,
+      payload: { squadId: id },
+    });
+    return squad;
+  }
+
+  listSkillTemplates() {    return this.database.prepare(`
       SELECT * FROM skill_templates ORDER BY updated_at DESC, name
     `).all().map((row) => ({
       id: row.id,
@@ -2656,16 +2803,16 @@ export class TaskboardDatabase {
     }
 
     const timestamp = now();
+    if (task.assignedAgentId && task.assignedAgentId !== selectedAgent.id) {
+      throw new ApiError(409, "TASK_ALREADY_ASSIGNED", "Task is already assigned to another agent", {
+        assignedAgentId: task.assignedAgentId,
+      });
+    }
     const existingLock = this.database.prepare("SELECT * FROM task_locks WHERE task_id = ?").get(task.id);
     if (existingLock && existingLock.expires_at > timestamp && existingLock.owner !== selectedAgent.id) {
       throw new ApiError(409, "TASK_LOCKED", "Task is already locked by another agent", {
         owner: existingLock.owner,
         expiresAt: existingLock.expires_at,
-      });
-    }
-    if (task.assignedAgentId && task.assignedAgentId !== selectedAgent.id) {
-      throw new ApiError(409, "TASK_ALREADY_ASSIGNED", "Task is already assigned to another agent", {
-        assignedAgentId: task.assignedAgentId,
       });
     }
 

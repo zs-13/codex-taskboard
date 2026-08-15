@@ -4,7 +4,9 @@
 
 一个本地优先的议题面板，可在浏览器中运行，也可通过独立 CDP 启动器或其注入脚本嵌入 Codex。同一套 HTTP API 为 React UI 和随附 Codex Skill 使用的 `taskctl` CLI 提供支持。
 
-![Codex Taskboard 产品截图](docs/assets/codex-taskboard.png)
+![Codex Taskboard 看板视图](docs/assets/codex-taskboard.png)
+
+![Codex Taskboard 小队视图](docs/assets/codex-taskboard-squad.png)
 
 ## 快速开始（用 Codex 安装）
 
@@ -89,6 +91,20 @@ npm start
 ```
 
 打开 <http://127.0.0.1:47823>。SQLite 数据库存储在 `.data/taskboard.sqlite`。
+
+## 本机 CLI 工具自动识别
+
+小队面板（「我的工具」）会扫描本机已安装的开发 CLI，并把它们列为可加入小队的工具型 Agent。默认检测 `claude`、`codex`、`cursor`、`gh`、`git`、`node`、`npm`、`bun`、`python`、`uv`、`docker`、`kubectl`，名单可配置：
+
+```bash
+# 逗号分隔
+CODEX_TASKBOARD_CLI_TOOLS="claude,codex,gh,npx" npm start
+
+# 或 JSON 数组
+CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","gh"]' npm start
+```
+
+API：`GET /api/cli-tools`（检测结果：name、command、path、version、installed、authorized），`POST /api/cli-tools/:name/authorize` / `.../revoke`。已授权的工具会以 `source: "cli"` 出现在 Agent 名录中并可加入小队。面板打开时自动扫描，也可手动刷新。
 
 如需在前端实时重载模式下开发：
 

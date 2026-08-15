@@ -4,7 +4,9 @@
 
 A local-first issue board that runs in a browser and can be embedded in Codex through the standalone CDP launcher or its injection script. The same HTTP API powers the React UI and the `taskctl` CLI used by the bundled Codex Skill.
 
-![Codex Taskboard product screenshot](docs/assets/codex-taskboard.png)
+![Codex Taskboard board view](docs/assets/codex-taskboard.png)
+
+![Codex Taskboard squad view](docs/assets/codex-taskboard-squad.png)
 
 ## Quick start (install with Codex)
 
@@ -89,6 +91,20 @@ npm start
 ```
 
 Open <http://127.0.0.1:47823>. The SQLite database is stored at `.data/taskboard.sqlite`.
+
+## Local CLI tool auto-detection
+
+The squad panel ("我的工具") scans this machine for installed developer CLIs and lists them as tool agents you can add to a squad. Detection covers `claude`, `codex`, `cursor`, `gh`, `git`, `node`, `npm`, `bun`, `python`, `uv`, `docker`, `kubectl` by default and is configurable:
+
+```bash
+# comma-separated list
+CODEX_TASKBOARD_CLI_TOOLS="claude,codex,gh,npx" npm start
+
+# or a JSON array
+CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","gh"]' npm start
+```
+
+The API is `GET /api/cli-tools` (scan result: name, command, path, version, installed, authorized) and `POST /api/cli-tools/:name/authorize` / `.../revoke`. Authorized tools appear in the agent roster with `source: "cli"` and can join squads. The panel refreshes the scan when it opens and on demand.
 
 For development with live frontend reload:
 

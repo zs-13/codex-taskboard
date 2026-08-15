@@ -32,6 +32,7 @@ import { ApiError, TaskboardDatabase } from "./database.mjs";
 import { createJiraConfigStore } from "./jira-config.mjs";
 import { createJiraIntegration } from "./jira-integration.mjs";
 import { ProjectSummaryService } from "./project-summary.mjs";
+import { scanCliTools } from "./cli-tools.mjs";
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const execFileAsync = promisify(execFile);
@@ -864,18 +865,24 @@ function parseStringList(value, name, { maxItems = 20, maxLength = 64 } = {}) {
 
 function parseAgentUpsert(body) {
   assertPlainObject(body);
-  assertAllowedKeys(body, new Set(["id", "name", "skills", "workspacePath", "avatarUrl"]));
+  assertAllowedKeys(body, new Set(["id", "name", "skills", "workspacePath", "avatarUrl", "source", "authorized"]));
   const id = stringField(body.id, "id", { maxLength: 96 });
   if (id !== undefined && !/^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/.test(id)) {
     throw new ApiError(400, "INVALID_FIELD", "'id' must be a lowercase agent identifier");
   }
   const avatarUrl = stringField(body.avatarUrl ?? null, "avatarUrl", { nullable: true, maxLength: 2048 });
+  const source = stringField(body.source ?? "manual", "source", { maxLength: 32 });
+  if (!["manual", "cli"].includes(source)) {
+    throw new ApiError(400, "INVALID_FIELD", "'source' must be 'manual' or 'cli'");
+  }
   return {
     id,
     name: stringField(body.name, "name", { required: true, maxLength: 120 }),
     skills: parseStringList(body.skills, "skills"),
     workspacePath: pathField(body.workspacePath ?? null, "workspacePath"),
     avatarUrl,
+    source,
+    authorized: body.authorized === undefined ? source === "cli" : Boolean(body.authorized),
   };
 }
 
@@ -891,8 +898,22 @@ function parseSquadCreate(body) {
   };
 }
 
-function parseSkillTemplateCreate(body) {
+function parseSquadUpdate(body) {
   assertPlainObject(body);
+  assertAllowedKeys(body, new Set(["name", "leaderAgentId", "memberAgentIds", "skillTags"]));
+  return {
+    name: stringField(body.name, "name", { maxLength: 120 }),
+    leaderAgentId: stringField(body.leaderAgentId, "leaderAgentId", { maxLength: 96 }),
+    memberAgentIds: body.memberAgentIds === undefined
+      ? undefined
+      : parseStringList(body.memberAgentIds, "memberAgentIds", { maxItems: 50, maxLength: 96 }),
+    skillTags: body.skillTags === undefined
+      ? undefined
+      : parseStringList(body.skillTags, "skillTags"),
+  };
+}
+
+function parseSkillTemplateCreate(body) {  assertPlainObject(body);
   assertAllowedKeys(body, new Set(["id", "name", "description", "body", "skillTags"]));
   return {
     id: stringField(body.id, "id", { maxLength: 96 }),
@@ -1620,6 +1641,8 @@ export function resolveServerOptions(options = {}) {
       ?? path.join(codexHome, ".codex-global-state.json"),
     codexProcessesPath: options.codexProcessesPath
       ?? path.join(codexHome, "process_manager", "chat_processes.json"),
+    cliToolNames: options.cliToolNames,
+    cliToolPath: options.cliToolPath,
     instanceToken,
     instanceSecret,
     version: String(
@@ -2659,6 +2682,59 @@ export function createTaskboardServer(options = {}) {
         return methodNotAllowed(response, ["GET", "POST"]);
       }
 
+      if (pathname === "/api/cli-tools") {
+        if (request.method !== "GET") return methodNotAllowed(response, ["GET"]);
+        const scanned = await scanCliTools({
+          env: codexProcessEnvironment,
+          names: resolved.cliToolNames,
+          pathDirectoriesOverride: resolved.cliToolPath
+            ? [resolved.cliToolPath]
+            : undefined,
+        });
+        const stored = new Map(
+          database.listCliTools().map((tool) => [tool.name, tool]),
+        );
+        const tools = scanned.map((tool) => {
+          const prior = stored.get(tool.name);
+          return {
+            ...tool,
+            authorized: prior?.authorized ?? false,
+          };
+        });
+        // Persist the fresh scan so /api/agents can merge in cli-sourced entries.
+        for (const tool of tools) {
+          database.upsertCliTool({ ...tool, authorized: tool.authorized }, actorFromRequest(request));
+        }
+        return sendJson(response, 200, { tools, scannedAt: new Date().toISOString() });
+      }
+
+      const cliToolRoute = pathname.match(/^\/api\/cli-tools\/([^/]+)\/(authorize|revoke)$/);
+      if (cliToolRoute) {
+        if (request.method !== "POST") return methodNotAllowed(response, ["POST"]);
+        const toolName = decodeRouteSegment(cliToolRoute[1], "CLI tool name");
+        const action = cliToolRoute[2];
+        const authorized = action === "authorize";
+        const actor = actorFromRequest(request);
+        const tool = database.setCliToolAuthorized(toolName, authorized, actor);
+        let agent = null;
+        if (authorized && tool.installed) {
+          agent = database.upsertAgent({
+            id: `cli-${toolName}`,
+            name: toolName,
+            skills: ["cli"],
+            workspacePath: tool.path ? path.dirname(tool.path) : null,
+            avatarUrl: null,
+            source: "cli",
+            authorized: true,
+          }, actor);
+        } else if (!authorized) {
+          agent = database.listAgents().find((candidate) => candidate.id === `cli-${toolName}`) ?? null;
+        }
+        const payload = { tool, agent };
+        events.emit("cli-tool.authorization", payload);
+        return sendJson(response, 200, payload);
+      }
+
       if (pathname === "/api/squads") {
         if (request.method === "GET") return sendJson(response, 200, { squads: database.listSquads() });
         if (request.method === "POST") {
@@ -2674,6 +2750,24 @@ export function createTaskboardServer(options = {}) {
           return sendJson(response, 201, payload);
         }
         return methodNotAllowed(response, ["GET", "POST"]);
+      }
+
+      const squadUpdateRoute = pathname.match(/^\/api\/squads\/([^/]+)$/);
+      if (squadUpdateRoute) {
+        if (request.method !== "PATCH") return methodNotAllowed(response, ["PATCH"]);
+        const squadId = decodeRouteSegment(squadUpdateRoute[1], "Squad id");
+        const input = parseSquadUpdate(await readJson(request));
+        if (
+          input.name === undefined
+          && input.leaderAgentId === undefined
+          && input.memberAgentIds === undefined
+          && input.skillTags === undefined
+        ) {
+          throw new ApiError(400, "INVALID_FIELD", "Provide at least one squad field to update");
+        }
+        const squad = database.updateSquad(squadId, input, actorFromRequest(request));
+        events.emit("squad.updated", { squad });
+        return sendJson(response, 200, { squad });
       }
 
       if (pathname === "/api/skills") {
