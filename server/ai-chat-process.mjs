@@ -456,7 +456,12 @@ export function spawnCodexTurn({
       rejectCompletion(fatalError);
       return;
     }
-    resolveCompletion({ exitCode, signal });
+    const stderr = stderrBuffer.length > 0 ? stderrBuffer.toString("utf8") : "";
+    resolveCompletion({
+      exitCode,
+      signal,
+      ...(stderr ? { stderr } : {}),
+    });
   });
   child.stdin.on("error", () => {});
   child.stdio[3].on("error", () => {});

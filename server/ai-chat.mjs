@@ -533,9 +533,12 @@ export class AiChatService {
       publicError = terminalError() || "Codex reported a failed turn";
     } else if (result.exitCode !== 0) {
       status = "failed";
-      publicError = result.exitCode === null
-        ? `Codex exited due to signal ${result.signal ?? "unknown"}`
-        : `Codex exited with code ${result.exitCode}`;
+      const stderr = typeof result?.stderr === "string" ? result.stderr.trim() : "";
+      publicError = /codex cli was not found|spawn .*enoent/i.test(stderr)
+        ? "Codex CLI 未找到：请安装 Codex CLI（codex）并确保它在 PATH 中可用，然后重试"
+        : result.exitCode === null
+          ? `Codex exited due to signal ${result.signal ?? "unknown"}`
+          : `Codex exited with code ${result.exitCode}`;
     } else if (terminalOutcome() !== "completed") {
       status = "failed";
       publicError = "Codex exited without reporting turn completion";

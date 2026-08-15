@@ -5,6 +5,7 @@ import { promisify } from "node:util";
 
 import { withoutTaskboardLauncherEnvironment } from "../shared/codex-environment.mjs";
 import { executableCommand } from "../shared/executable-command.mjs";
+import { codexCliMissingError, isCodexMissingError } from "./codex-availability.mjs";
 import { ApiError } from "./database.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -257,16 +258,25 @@ export async function discoverAiCatalog({
 }) {
   const environment = withoutTaskboardLauncherEnvironment(processEnv);
   const modelCommand = executableCommand(codexExecutable, ["debug", "models"]);
-  const [modelResult, skillEntries] = await Promise.all([
-    execFileAsync(modelCommand.executable, modelCommand.args, {
-      cwd: workspacePath,
-      env: environment,
-      encoding: "utf8",
-      timeout: CATALOG_TIMEOUT_MS,
-      maxBuffer: CATALOG_MAX_BUFFER,
-    }),
-    listSkills(codexExecutable, workspacePath, environment),
-  ]);
+  let modelResult;
+  let skillEntries;
+  try {
+    [modelResult, skillEntries] = await Promise.all([
+      execFileAsync(modelCommand.executable, modelCommand.args, {
+        cwd: workspacePath,
+        env: environment,
+        encoding: "utf8",
+        timeout: CATALOG_TIMEOUT_MS,
+        maxBuffer: CATALOG_MAX_BUFFER,
+      }),
+      listSkills(codexExecutable, workspacePath, environment),
+    ]);
+  } catch (error) {
+    if (isCodexMissingError(error)) {
+      throw codexCliMissingError(error, modelCommand.executable);
+    }
+    throw error;
+  }
   const modelCatalog = JSON.parse(modelResult.stdout);
   return {
     models: sanitizeModels(modelCatalog?.models),
