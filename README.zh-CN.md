@@ -4,9 +4,25 @@
 
 一个本地优先的议题面板，可在浏览器中运行，也可通过独立 CDP 启动器或其注入脚本嵌入 Codex。同一套 HTTP API 为 React UI 和随附 Codex Skill 使用的 `taskctl` CLI 提供支持。
 
-![Codex Taskboard 看板视图](docs/assets/codex-taskboard.png)
+![Codex Taskboard 内嵌在 Codex 侧边栏](docs/assets/codex-sidebar-embedded.png)
 
-![Codex Taskboard 小队视图](docs/assets/codex-taskboard-squad.png)
+## 功能截图
+
+**议题看板**（含真实办公场景的演示议题）
+
+![看板视图](docs/assets/taskboard-board.png)
+
+**列表视图 / 甘特图 / 仪表盘**
+
+| 列表 | 甘特图 | 仪表盘 |
+| --- | --- | --- |
+| ![列表](docs/assets/taskboard-list.png) | ![甘特图](docs/assets/taskboard-gantt.png) | ![仪表盘](docs/assets/taskboard-dashboard.png) |
+
+**小队协作** — 我的工具（本机 CLI 识别）、小组（队长路由）、派活、最近动静
+
+| 我的工具 | 小组 | 派活 | 最近动静 |
+| --- | --- | --- | --- |
+| ![我的工具](docs/assets/taskboard-squad-tools.png) | ![小组](docs/assets/taskboard-squad-groups.png) | ![派活](docs/assets/taskboard-squad-assign.png) | ![最近动静](docs/assets/taskboard-squad-activity.png) |
 
 ## 快速开始（用 Codex 安装）
 

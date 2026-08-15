@@ -4,9 +4,25 @@
 
 A local-first issue board that runs in a browser and can be embedded in Codex through the standalone CDP launcher or its injection script. The same HTTP API powers the React UI and the `taskctl` CLI used by the bundled Codex Skill.
 
-![Codex Taskboard board view](docs/assets/codex-taskboard.png)
+![Codex Taskboard embedded in the Codex sidebar](docs/assets/codex-sidebar-embedded.png)
 
-![Codex Taskboard squad view](docs/assets/codex-taskboard-squad.png)
+## Screenshots
+
+**议题看板 / Board** (with real office-work demo issues)
+
+![Board view](docs/assets/taskboard-board.png)
+
+**列表视图 / 甘特图 / 仪表盘**
+
+| List | Gantt | Dashboard |
+| --- | --- | --- |
+| ![List](docs/assets/taskboard-list.png) | ![Gantt](docs/assets/taskboard-gantt.png) | ![Dashboard](docs/assets/taskboard-dashboard.png) |
+
+**小队协作 / Squad** — 我的工具（本机 CLI 识别）、小组（队长路由）、派活、最近动静
+
+| My tools | Groups | Assign | Activity |
+| --- | --- | --- | --- |
+| ![My tools](docs/assets/taskboard-squad-tools.png) | ![Groups](docs/assets/taskboard-squad-groups.png) | ![Assign](docs/assets/taskboard-squad-assign.png) | ![Activity](docs/assets/taskboard-squad-activity.png) |
 
 ## Quick start (install with Codex)
 
