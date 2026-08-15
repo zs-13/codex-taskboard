@@ -1,5 +1,34 @@
 # Codex Taskboard — agent notes
 
+## Quick install / 快速安装
+
+Install and launch the Codex Taskboard from GitHub:
+
+```bash
+git clone https://github.com/zs-13/codex-taskboard
+cd codex-taskboard
+npm install
+npm run codex
+```
+
+`npm run codex` works on **Windows and macOS**: it starts the local Taskboard
+service, launches the official Codex app with a dedicated CDP port, injects the
+Taskboard sidebar panel, and keeps the agent runner alive.
+
+Platform shortcuts (same effect as `npm run codex`):
+
+- **Windows:** `scripts\start-taskboard.bat`
+- **macOS:** `./scripts/start-taskboard.sh`
+
+Optional — install as a native Codex plugin (appears under Plugins > Local Plugins):
+
+- **Windows:** `scripts\install-codex-plugin.bat`
+- **macOS:** `./scripts/install-codex-plugin.sh`
+
+When the panel is running, the local service URL is
+<http://127.0.0.1:47823> (default), and the in-Codex panel opens in the
+injected sidebar. `npm run codex` prints the exact address on startup.
+
 ## Native Codex plugin
 
 This repository is a valid **Codex plugin**:
