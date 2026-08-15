@@ -2545,7 +2545,7 @@ export class TaskboardDatabase {
 
   createSquad(input, actor) {
     const timestamp = now();
-    const leader = this.database.prepare("SELECT id FROM agents WHERE id = ?").get(input.leaderAgentId);
+    const leader = this.#squadAgent(input.leaderAgentId, actor);
     if (!leader) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${input.leaderAgentId}' does not exist`);
     const id = input.id || randomUUID();
     this.database.exec("BEGIN IMMEDIATE");
@@ -2556,7 +2556,7 @@ export class TaskboardDatabase {
       `).run(id, input.name, input.leaderAgentId, JSON.stringify(input.skillTags), timestamp, timestamp);
       const memberIds = [...new Set([input.leaderAgentId, ...input.memberAgentIds])];
       for (const agentId of memberIds) {
-        const agent = this.database.prepare("SELECT id FROM agents WHERE id = ?").get(agentId);
+        const agent = this.#squadAgent(agentId, actor);
         if (!agent) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${agentId}' does not exist`);
         this.database.prepare(`
           INSERT INTO squad_members (squad_id, agent_id, role, created_at)
@@ -2578,6 +2578,38 @@ export class TaskboardDatabase {
       payload: { squadId: id },
     });
     return squad;
+  }
+
+  // Resolve an agent for a squad member/leader, auto-registering a CLI tool
+  // (cli-<name>) that is known on this machine but has no agent row yet. This
+  // lets users pick an installed-but-not-yet-authorized tool in the squad
+  // member picker without a hard 404.
+  #squadAgent(agentId, actor) {
+    const existing = this.database.prepare("SELECT id FROM agents WHERE id = ?").get(agentId);
+    if (existing) return existing;
+    if (!String(agentId).startsWith("cli-")) return null;
+    const toolName = String(agentId).slice("cli-".length);
+    const tool = this.database.prepare("SELECT * FROM cli_tools WHERE name = ?").get(toolName);
+    if (tool && !tool.installed) {
+      // Known CLI tool but not installed on this machine: give a readable
+      // reason instead of a bare AGENT_NOT_FOUND.
+      throw new ApiError(
+        409,
+        "CLI_TOOL_NOT_INSTALLED",
+        `本机未检测到 ${toolName}，请先在「我的工具」中安装并启用后再加入小组。`,
+      );
+    }
+    if (!tool || !tool.installed) return null;
+    const agent = this.upsertAgent({
+      id: agentId,
+      name: toolName,
+      skills: ["cli"],
+      workspacePath: tool.path ? path.dirname(tool.path) : null,
+      avatarUrl: null,
+      source: "cli",
+      authorized: Boolean(tool.authorized),
+    }, actor);
+    return this.database.prepare("SELECT id FROM agents WHERE id = ?").get(agentId);
   }
 
   updateSquad(id, input, actor) {
@@ -2628,6 +2660,22 @@ export class TaskboardDatabase {
       payload: { squadId: id },
     });
     return squad;
+  }
+
+  deleteSquad(id, actor) {
+    const existing = this.database.prepare("SELECT id, name FROM squads WHERE id = ?").get(id);
+    if (!existing) throw new ApiError(404, "SQUAD_NOT_FOUND", `Squad '${id}' does not exist`);
+    this.database.prepare("DELETE FROM squad_members WHERE squad_id = ?").run(id);
+    this.database.prepare("DELETE FROM squads WHERE id = ?").run(id);
+    this.recordActivity({
+      projectId: null,
+      taskId: null,
+      actor,
+      eventType: "squad.deleted",
+      message: `Squad ${existing.name} deleted`,
+      payload: { squadId: id },
+    });
+    return { id };
   }
 
   listSkillTemplates() {    return this.database.prepare(`
