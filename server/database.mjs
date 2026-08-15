@@ -2828,9 +2828,28 @@ export class TaskboardDatabase {
     const agents = this.listAgents();
     const labels = new Set(task.labels.map((label) => label.toLowerCase()));
     const score = (agent) => agent.skills.filter((skill) => labels.has(skill.toLowerCase())).length;
+    // Test/scratch agents from adversarial or autotest runs must never win the
+    // default selection: they are not real runtimes and would claim demo work
+    // that should go to a signed-in CLI agent.
+    const TEST_AGENT_PREFIXES = [
+      "assigned-mismatch-",
+      "autotest-",
+      "guard-agent",
+      "builder-",
+      "reviewer-",
+    ];
+    const isTestAgent = (agent) => TEST_AGENT_PREFIXES.some((prefix) => agent.id.startsWith(prefix));
     const selectedAgent = input.agentId
       ? agents.find((agent) => agent.id === input.agentId)
-      : [...agents].sort((left, right) => score(right) - score(left) || left.name.localeCompare(right.name))[0];
+      : [...agents]
+        .filter((agent) => !isTestAgent(agent))
+        .sort((left, right) => {
+          // Prefer authorized, signed-in CLI runtimes over manual agents.
+          const leftReady = left.source === "cli" && left.authorized && left.signedIn !== false ? 1 : 0;
+          const rightReady = right.source === "cli" && right.authorized && right.signedIn !== false ? 1 : 0;
+          if (leftReady !== rightReady) return rightReady - leftReady;
+          return score(right) - score(left) || left.name.localeCompare(right.name);
+        })[0];
     if (!selectedAgent) {
       throw new ApiError(404, "AGENT_NOT_FOUND", input.agentId
         ? `Agent '${input.agentId}' does not exist`

@@ -138,3 +138,30 @@ test("agent runner lets assigned squad subtasks be claimed instead of recursivel
   assert.equal(updated.body.task.status, "in_progress");
   assert.equal(updated.body.task.assignedAgentId, "builder");
 });
+
+test("agent runner prefers a real CLI agent over a stale test agent", async () => {
+  const baseUrl = await startServer();
+  // A stale test agent that would otherwise win the alphabetical tie-break.
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "assigned-mismatch-1786768591017", name: "Assigned Mismatch", skills: ["frontend"], workspacePath: null },
+  });
+  // A real, authorized, signed-in CLI agent.
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "cli-claude", name: "claude", skills: ["cli"], source: "cli", authorized: true, workspacePath: null },
+  });
+
+  const task = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Unlabeled demo task", status: "todo", priority: "medium", labels: [] },
+  });
+  assert.equal(task.response.status, 201);
+
+  const result = await runAgentRunnerOnce({ baseUrl, ownerSessionId: "test-runner", maxClaims: 1 });
+  assert.deepEqual(result.actions.map((action) => action.type), ["agent-claimed"]);
+
+  const updated = await request(baseUrl, `/api/tasks/${task.body.task.id}`);
+  assert.equal(updated.body.task.status, "in_progress");
+  assert.equal(updated.body.task.assignedAgentId, "cli-claude");
+});
