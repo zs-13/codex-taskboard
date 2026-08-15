@@ -16,9 +16,10 @@ const command = isWindows
 
 // For a checked-out repo we already ARE the plugin; adjust the personal
 // marketplace entry to point at this directory rather than cloning.
-if (!isWindows) {
-  process.env.CODEX_PLUGIN_LOCAL_PATH = root;
-}
+// Set on every platform so the Windows PowerShell branch (install-codex-plugin.ps1
+// -SkipClone) also resolves the marketplace path to this repo instead of a
+// non-existent ~/.codex/plugins/codex-taskboard clone.
+process.env.CODEX_PLUGIN_LOCAL_PATH = root;
 
 const child = spawn(command[0], command[1], {
   cwd: root,

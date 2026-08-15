@@ -24,8 +24,13 @@ $pluginsDir = Join-Path $codexHome "plugins"
 # When this is a checked-out repo (CODEX_PLUGIN_LOCAL_PATH set, or -SkipClone
 # from the Codex action), point the marketplace entry at the current directory
 # instead of a fresh clone under ~/.codex/plugins.
+# $PSScriptRoot is the scripts/ dir; the repo root is its parent.
+$repoRoot = Split-Path -Parent $PSScriptRoot
 $pluginDir = if ($env:CODEX_PLUGIN_LOCAL_PATH) {
   $env:CODEX_PLUGIN_LOCAL_PATH
+} elseif ($SkipClone) {
+  # -SkipClone means the caller already has a checkout; use this repo.
+  $repoRoot
 } else {
   Join-Path $pluginsDir "codex-taskboard"
 }
