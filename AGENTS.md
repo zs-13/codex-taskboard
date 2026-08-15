@@ -58,6 +58,25 @@ The sidebar panel itself is still rendered by the CDP injector (`npm run codex`)
 - **Just the service:** `npm start` serves the built UI on <http://127.0.0.1:47823>.
 - The runtime SQLite database lives in `.data/` (gitignored).
 
+## Common pitfalls (panel, instances, data)
+
+- The sidebar panel is **not a native plugin panel**; it is injected over CDP into
+  a Codex window launched with `--remote-debugging-port`. Opening Codex from the
+  app icon does not enable CDP, so the panel will not appear — always open it via
+  the launcher (`scripts\start-taskboard.bat` on Windows, `npm run codex` /
+  `./scripts/start-taskboard.sh` on macOS).
+- Closing and reopening Codex clears the panel; the resident injector re-attaches
+  automatically once a debuggable Codex reappears on its port (reopen via the
+  launcher, not the icon).
+- Run exactly one Taskboard. Each distinct CDP port/profile creates another Codex
+  window, injector, and service with its own `.data/taskboard.sqlite`, splitting
+  task history. The launcher is idempotent; reuse the same port (Windows `9232`,
+  macOS `9231`).
+- The service and agent runner keep running when Codex closes on purpose (that is
+  what powers real-time progress). Closing Codex does not delete tasks.
+- Windows one-click setup: `scripts\setup-taskboard-autostart.ps1` creates a
+  "Codex Taskboard" desktop shortcut and a logon autostart for the injector.
+
 # Project Development Rules
 
 For feature work in this repository, use this order:

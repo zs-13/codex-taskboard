@@ -60,6 +60,13 @@ npm run codex
 
 **Open in Codex directly:** the repository ships a Codex environment action (`启动` / "Launch", in `.codex/environments/environment.toml`) that dispatches to the platform launcher (`scripts/codex-launch.mjs`). Open the cloned folder in the Codex app and click the action to start the panel.
 
+> **Windows one-click setup (optional):** after cloning, run
+> `scripts\setup-taskboard-autostart.ps1` to create a **Codex Taskboard** desktop
+> shortcut and a logon autostart for the resident injector. From then on, open
+> the panel by double-clicking that shortcut — no terminal needed. See
+> [Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls)
+> for the pitfalls this avoids.
+
 ## Install as a native Codex plugin
 
 This repository is packaged as a **Codex plugin** (`.codex-plugin/plugin.json` + repo-scoped marketplace `.agents/plugins/marketplace.json`), so Codex can install it from the GitHub link and show it in the Plugins sidebar. The bundled `manage-taskboard` skill becomes available to Codex agents.
@@ -247,6 +254,42 @@ The script adds a Taskboard entry to the Codex sidebar and renders the iframe ac
 “在对话中打开” selects the corresponding native Codex project when one is available and opens an unsent native composer with an `e-taskboard` instruction and the issue's actual identifier. The installed Skill is selected implicitly from that instruction, so the composer does not add a `$manage-taskboard` mention. A conversation is attributed only after it actually processes the issue: `taskctl` reads Codex's `CODEX_THREAD_ID` and records that ID on the issue or comment mutation. Recorded IDs are clickable through Codex's native route bridge. Each issue can bind either one Git branch or one worktree; the options are scanned from the selected Codex project's repository instead of being typed by hand. The integration uses Codex's existing project, composer, and route markers; it does not patch React, replace `fetch`, load private chunks, or edit Codex data files.
 
 To use a different UI origin, set `window.__CODEX_TASKBOARD_URL__` before the user script runs.
+
+## Keep the sidebar panel available (avoid these pitfalls)
+
+The sidebar panel is **not a native Codex plugin panel** — the Codex plugin
+format covers skills/MCP, not third-party sidebar embeds. The panel is injected
+over Chrome DevTools Protocol (CDP) into a Codex window that the launcher started
+with `--remote-debugging-port`. These are the things users hit most often, and
+how to avoid them:
+
+1. **Open Codex through the launcher, not the app icon.** A Codex window launched
+   normally (Start menu / app icon) does not enable CDP, so the injector cannot
+   attach and the panel never appears. Always open the panel's Codex window via
+   `scripts\start-taskboard.bat` (Windows) or `./scripts/start-taskboard.sh` /
+   `npm run codex` (macOS).
+
+2. **Closing and reopening Codex clears the panel.** The panel lives inside the
+   Codex window, so a restart removes it. The resident injector re-attaches
+   automatically as soon as a debuggable Codex reappears on its port — reopen
+   Codex through the launcher and the panel comes back on its own.
+
+3. **Run exactly one Taskboard.** Do not launch with a different CDP port each
+   time. Every distinct port/profile spawns another Codex window, another
+   injector, and another service, each with its own `.data/taskboard.sqlite`, so
+   history appears to "disappear" between instances. Stick to one port
+   (Windows `9232`, macOS `9231`). The launcher is idempotent — re-running it
+   reuses the running service, injector, and Codex instead of duplicating them.
+
+4. **The service outlives Codex on purpose.** The service and agent runner keep
+   running when Codex closes; that is what keeps task progress and history moving
+   in real time. Closing Codex does not delete tasks. To stop everything, stop
+   the service/injector/agent-runner processes or disable the logon autostart.
+
+5. **One-click setup (Windows).** `scripts\setup-taskboard-autostart.ps1` creates
+   a **Codex Taskboard** desktop shortcut (launcher on a fixed port) and registers
+   a logon autostart for the resident injector, so the panel is one click away
+   after install and survives reboots.
 
 ## Configuration
 
