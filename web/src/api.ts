@@ -505,7 +505,7 @@ export async function saveAgent(input: {
 }): Promise<AgentProfile> {
   const data = await request<{ agent: AgentProfile }>("/api/agents", {
     method: "POST",
-    headers: { "Idempotency-Key": `agent-${input.id ?? input.name}` },
+    headers: { "Idempotency-Key": `agent-${encodeURIComponent(input.id ?? input.name)}` },
     body: JSON.stringify(input),
   });
   return data.agent;
@@ -524,7 +524,7 @@ export async function createSquad(input: {
 }): Promise<Squad> {
   const data = await request<{ squad: Squad }>("/api/squads", {
     method: "POST",
-    headers: { "Idempotency-Key": `squad-${input.name}-${input.leaderAgentId}` },
+    headers: { "Idempotency-Key": `squad-${encodeURIComponent(input.name)}-${input.leaderAgentId}` },
     body: JSON.stringify(input),
   });
   return data.squad;
@@ -598,7 +598,7 @@ export async function createSkillTemplate(input: {
 }): Promise<SkillTemplate> {
   const data = await request<{ skill: SkillTemplate }>("/api/skills", {
     method: "POST",
-    headers: { "Idempotency-Key": `skill-${input.name}` },
+    headers: { "Idempotency-Key": `skill-${encodeURIComponent(input.name)}` },
     body: JSON.stringify(input),
   });
   return data.skill;

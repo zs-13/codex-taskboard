@@ -347,3 +347,40 @@ test("createSquad auto-registers a known CLI tool member", async () => {
   const after = await request(baseUrl, "/api/squads");
   assert.ok(!after.body.squads.some((s) => s.id === squad.body.squad.id));
 });
+
+test("createSquad with a cli-<tool> leader matches the wizard flow (P1 regression)", async () => {
+  // Mirrors the E2E flow from MUTI-16: the wizard authorizes a CLI tool and
+  // submits leaderAgentId cli-<tool> (normalized from the bare tool name).
+  // The backend must auto-register the agent and create the squad with
+  // members[0].agentId === cli-<tool> instead of 404 AGENT_NOT_FOUND.
+  const fakeDir = await mkdtemp(path.join(os.tmpdir(), "codex-taskboard-fakebin-"));
+  temporaryDirectories.push(fakeDir);
+  await writeFile(path.join(fakeDir, "claude"), "#!/bin/sh\necho claude 1.2.3\n", "utf8");
+
+  const baseUrl = await startServer({ cliToolNames: ["claude"], cliToolPath: fakeDir });
+  // Seed the tool row the way the panel does (scan persists cli_tools).
+  const seed = await request(baseUrl, "/api/cli-tools", { method: "GET" });
+  assert.equal(seed.response.status, 200);
+  const seededClaude = seed.body.tools.find((tool) => tool.name === "claude");
+  assert.ok(seededClaude, "claude should be scanned");
+  assert.equal(seededClaude.installed, true, "claude should be detected as installed");
+
+  // Authorize the tool the way the wizard does (installed → agent cli-claude).
+  const authorized = await request(baseUrl, "/api/cli-tools/claude/authorize", { method: "POST" });
+  assert.equal(authorized.response.status, 200);
+  assert.equal(authorized.body.agent.id, "cli-claude");
+
+  const squad = await request(baseUrl, "/api/squads", {
+    method: "POST",
+    body: {
+      name: "Claude Leader Squad",
+      leaderAgentId: "cli-claude",
+      memberAgentIds: [],
+      skillTags: [],
+    },
+  });
+  assert.equal(squad.response.status, 201);
+  assert.equal(squad.body.squad.leaderAgentId, "cli-claude");
+  assert.ok(squad.body.squad.members.length >= 1);
+  assert.equal(squad.body.squad.members[0].agentId, "cli-claude");
+});
