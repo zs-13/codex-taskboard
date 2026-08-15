@@ -5,7 +5,7 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 
 import { createTaskboardServer } from "../server/index.mjs";
-import { MULTICA_RUNTIMES } from "../server/cli-tools.mjs";
+import { EXTRA_AGENT_CLIS, MULTICA_RUNTIMES } from "../server/cli-tools.mjs";
 
 const runningApps = [];
 const temporaryDirectories = [];
@@ -131,7 +131,7 @@ test("cli-tools scan respects CODEX_TASKBOARD_CLI_TOOLS_JSON", async () => {
   assert.equal(typeof fake.authorized, "boolean");
 });
 
-test("default CLI list includes the Multica 20 runtimes plus gh/common tools", async () => {
+test("default CLI list covers the Multica agent runtimes plus extra agent CLIs", async () => {
   // Fresh server without cliToolNames override → default list is used.
   const baseUrl = await startServer();
 
@@ -142,8 +142,13 @@ test("default CLI list includes the Multica 20 runtimes plus gh/common tools", a
   for (const runtime of MULTICA_RUNTIMES) {
     assert.ok(names.includes(runtime), `default list should include ${runtime}`);
   }
-  for (const extra of ["gh", "git", "node", "npm"]) {
-    assert.ok(names.includes(extra), `default list should keep ${extra}`);
+  for (const extra of EXTRA_AGENT_CLIS) {
+    assert.ok(names.includes(extra), `default list should include agent CLI ${extra}`);
   }
-  assert.ok(listed.body.tools.length >= MULTICA_RUNTIMES.length + 4);
+  // The default scope is Agent CLIs only — general dev tools must NOT be
+  // scanned unless explicitly configured via CODEX_TASKBOARD_CLI_TOOLS.
+  for (const excluded of ["git", "node", "npm", "python", "docker", "kubectl", "gh"]) {
+    assert.ok(!names.includes(excluded), `default list should exclude dev tool ${excluded}`);
+  }
+  assert.ok(listed.body.tools.length >= MULTICA_RUNTIMES.length + EXTRA_AGENT_CLIS.length);
 });

@@ -110,17 +110,17 @@ Open <http://127.0.0.1:47823>. The SQLite database is stored at `.data/taskboard
 
 ## Local CLI tool auto-detection
 
-The squad panel ("我的工具") scans this machine for installed developer CLIs and lists them as tool agents you can add to a squad. Detection follows Multica's 20 agent CLI runtimes (`claude`, `codex`, `cursor-agent`, `copilot`, `opencode`, `openclaw`, `hermes`, `pi`, `agy`, `codebuddy`, `deveco`, `grok`, `kimi`, `kiro-cli`, `qodercli`, `qoderclicn`, `qwen`, `qwenpaw`, `reasonix`, `traecli`) plus `gh`, `git`, `node`, `npm`, `bun`, `python`, `uv`, `docker`, `kubectl` by default, and is configurable:
+The squad panel ("我的工具") scans this machine for installed Agent CLIs and lists them as tool agents you can add to a squad. Detection covers Agent CLIs only — Multica's 20 agent CLI runtimes (`claude`, `codex`, `cursor-agent`, `copilot`, `opencode`, `openclaw`, `hermes`, `pi`, `agy`, `codebuddy`, `deveco`, `grok`, `kimi`, `kiro-cli`, `qodercli`, `qoderclicn`, `qwen`, `qwenpaw`, `reasonix`, `traecli`) plus `kilo`, `omp`, `multica`. General dev tools (`git`, `node`, `npm`, `python`, `docker`, ...) are intentionally excluded so the list stays a roster of task-capable agents. The list is configurable:
 
 ```bash
 # comma-separated list
-CODEX_TASKBOARD_CLI_TOOLS="claude,codex,gh,npx" npm start
+CODEX_TASKBOARD_CLI_TOOLS="claude,codex,kilo" npm start
 
 # or a JSON array
-CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","gh"]' npm start
+CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","kilo"]' npm start
 ```
 
-The API is `GET /api/cli-tools` (scan result: name, command, path, version, installed, `signedIn` three-state true/false/null, authorized) and `POST /api/cli-tools/:name/authorize` / `.../revoke`. Tools that need a login report `signedIn: false` when installed-but-not-signed-in, so the panel can show a login prompt; not-installed tools report `null`. Authorized tools appear in the agent roster with `source: "cli"` and can join squads. The panel refreshes the scan when it opens and on demand.
+The API is `GET /api/cli-tools` (scan result: name, command, path, version, installed, `signedIn` three-state true/false/null, authorized) and `POST /api/cli-tools/:name/authorize` / `.../revoke`. The `signedIn` state means: `true` = installed and signed in (ready to run), `false` = installed but no login/auth state was detected — the tool cannot run tasks until the user signs in, `null` = not installed or login state is not applicable. Authorized tools appear in the agent roster with `source: "cli"` and can join squads. The panel refreshes the scan when it opens and on demand.
 
 For development with live frontend reload:
 

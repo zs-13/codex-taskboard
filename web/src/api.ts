@@ -558,7 +558,13 @@ export interface CliTool {
   version: string | null;
   installed: boolean;
   authorized: boolean;
-  /** P0: tri-state login — installed & signed in / installed not signed in / not installed. */
+  /**
+   * Tri-state login status:
+   * - true  = installed and signed in (ready to run tasks)
+   * - false = installed but no login/auth state detected — cannot run tasks
+   *           until the user signs in on this machine
+   * - null  = not installed, or login state is not applicable / unknown
+   */
   signedIn: boolean | null;
 }
 

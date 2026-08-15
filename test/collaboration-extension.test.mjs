@@ -347,3 +347,28 @@ test("createSquad auto-registers a known CLI tool member", async () => {
   const after = await request(baseUrl, "/api/squads");
   assert.ok(!after.body.squads.some((s) => s.id === squad.body.squad.id));
 });
+
+test("createSquad with a known-but-not-installed CLI tool member returns CLI_TOOL_NOT_INSTALLED", async () => {
+  // A tool name that is scanned (so it is known to the cli_tools table) but
+  // has no executable anywhere: the readable error must come back, not a bare
+  // AGENT_NOT_FOUND.
+  const baseUrl = await startServer({ cliToolNames: ["definitely-not-a-real-cli"] });
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+  });
+  const seed = await request(baseUrl, "/api/cli-tools", { method: "GET" });
+  assert.equal(seed.response.status, 200);
+
+  const squad = await request(baseUrl, "/api/squads", {
+    method: "POST",
+    body: {
+      name: "Missing Tool Squad",
+      leaderAgentId: "builder",
+      memberAgentIds: ["cli-definitely-not-a-real-cli"],
+      skillTags: [],
+    },
+  });
+  assert.equal(squad.response.status, 409);
+  assert.equal(squad.body.error.code, "CLI_TOOL_NOT_INSTALLED");
+});

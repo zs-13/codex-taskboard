@@ -348,13 +348,18 @@ export function CollaborationPanel({
                           <li className="collab-agent-chip" key={candidate.id}>
                             <span className="collab-avatar collab-avatar-terminal" aria-hidden="true"><LinearIcon name="terminal" /></span>
                             <span className="collab-agent-chip-name">{candidate.name}</span>
-                            <span className="collab-tool-meta">
+                            <span
+                              className="collab-tool-meta"
+                              title={candidate.installed && candidate.signedIn === false
+                                ? text("已检测到该 CLI，但未检测到登录/认证状态。它还不能执行任务，请先完成登录。", "CLI is installed but no login/auth state was detected. It cannot run tasks until you sign in.")
+                                : undefined}
+                            >
                               <span
                                 className={`collab-tool-dot ${candidate.installed && candidate.signedIn !== false ? "is-ready" : candidate.installed ? "is-pending" : "is-missing"}`}
                                 aria-hidden="true"
                               />
                               <span>{candidate.installed
-                                ? (candidate.signedIn === false ? text("已安装未登录", "Installed, not signed in") : candidate.authorized ? text("已启用", "Enabled") : text("未启用", "Not enabled"))
+                                ? (candidate.signedIn === false ? text("已安装 · 未登录（登录后可用）", "Installed · not signed in (sign in to use)") : candidate.authorized ? text("已启用", "Enabled") : text("未启用", "Not enabled"))
                                 : text("未安装", "Not installed")}</span>
                             </span>
                             {candidate.installed && <span className="collab-badge-auto">{text("自动识别", "Auto-detected")}</span>}
@@ -363,12 +368,16 @@ export function CollaborationPanel({
                                 className="collab-login-hint"
                                 type="button"
                                 onClick={() => {
-                                  if (candidate.authorized) {
-                                    showToast(text(`打开 ${candidate.name} 登录…`, `Open ${candidate.name} to sign in…`));
-                                  }
+                                  const authorizeHint = candidate.authorized
+                                    ? ""
+                                    : text(" 点击工具卡片可先启用它。", " Click the tool card to enable it first.");
+                                  showToast(text(
+                                    `已检测到 ${candidate.name}，但未登录，暂不能执行任务。请先在本机完成 ${candidate.name} 登录，然后点「刷新」。${authorizeHint}`,
+                                    `${candidate.name} is installed but not signed in, so it cannot run tasks yet. Sign in on this machine, then hit Refresh.${authorizeHint}`,
+                                  ));
                                 }}
                               >
-                                {text("装好了但还没登录，点这里打开它登录", "Installed but not signed in — click to sign in")}
+                                {text("未登录 · 登录后才能执行任务", "Not signed in · sign in to run tasks")}
                               </button>
                             )}
                           </li>

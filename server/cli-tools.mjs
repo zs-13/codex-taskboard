@@ -1,28 +1,32 @@
 // cli-tools.mjs - local CLI tool auto-detection
 //
 // Scans PATH plus common per-platform install locations for a configurable
-// list of developer CLIs. The default list follows Multica's 20 agent CLI
-// runtimes (claude / codex / cursor-agent / copilot / opencode / openclaw /
-// hermes / pi / agy / codebuddy / deveco / grok / kimi / kiro-cli / qodercli /
-// qoderclicn / qwen / qwenpaw / reasonix / traecli) plus gh and other common
-// dev tools. The result is a lightweight Agent candidate list the squad UI can
-// render ("我的工具 / Local tools").
+// list of Agent CLIs. The default list follows Multica's agent CLI runtimes
+// (claude / codex / cursor-agent / copilot / opencode / openclaw / hermes /
+// pi / agy / codebuddy / deveco / grok / kimi / kiro-cli / qodercli /
+// qoderclicn / qwen / qwenpaw / reasonix / traecli) plus kilo / omp / multica.
+// Only Agent CLIs are listed — general dev tools (git/node/npm/python/docker
+// ...) are intentionally excluded so the "我的工具 / Local tools" panel stays
+// a roster of task-capable agents, not a PATH dump.
 //
 // Each tool reports:
 //   - installed: true when an executable is found on PATH / known dirs
 //   - signedIn:  three-state login status for the frontend to guide the user:
 //       true  = installed and signed in (ready to run)
-//       false = installed but not signed in (show "点这里打开它登录")
+//       false = installed but not signed in — the CLI exists but no login /
+//               auth state was detected, so it cannot run tasks yet; the user
+//               must sign in first (UI shows a clear explanation, not a bare
+//               "已安装未登录")
 //       null  = not installed, or login state is not applicable / unknown
 //   - authorized: persisted one-time consent (separate from login)
 //
 // The tool list is configurable:
 //   - CODEX_TASKBOARD_CLI_TOOLS         comma-separated names (space-trimmed)
 //   - CODEX_TASKBOARD_CLI_TOOLS_JSON    JSON array of names (takes precedence)
-//   - Defaults: the Multica 20 runtimes + gh/git/node/npm/bun/python/uv/docker/kubectl
+//   - Defaults: the Multica agent runtimes + kilo/omp/multica
 
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -30,7 +34,8 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 // Multica's 20 agent CLI runtimes (see github.com/zs-13/multica
-// scripts/agent-cli-command-names.txt), plus gh and common dev tools.
+// scripts/agent-cli-command-names.txt). These are the agent CLIs the squad
+// panel treats as task-capable tools.
 export const MULTICA_RUNTIMES = [
   "claude",
   "codex",
@@ -54,17 +59,16 @@ export const MULTICA_RUNTIMES = [
   "traecli",
 ];
 
+// Agent CLIs that aren't in the Multica 20 list but users install and expect
+// to see: Kilo Code CLI, Oh-My-Pi, and the Multica CLI itself.
+export const EXTRA_AGENT_CLIS = ["kilo", "omp", "multica"];
+
+// The default scan scope is Agent CLIs only. General dev tools (git/node/npm/
+// bun/python/uv/docker/kubectl) are deliberately NOT scanned — they can still
+// be added via CODEX_TASKBOARD_CLI_TOOLS when a user explicitly configures one.
 export const DEFAULT_CLI_TOOLS = [
   ...MULTICA_RUNTIMES,
-  "gh",
-  "git",
-  "node",
-  "npm",
-  "bun",
-  "python",
-  "uv",
-  "docker",
-  "kubectl",
+  ...EXTRA_AGENT_CLIS,
 ];
 
 const WINDOWS_EXECUTABLE_SUFFIXES = ["", ".exe", ".cmd", ".bat", ".ps1"];
@@ -231,12 +235,50 @@ function probeOpenCodeSignedIn(env, home) {
   return Object.keys(auth).length > 0;
 }
 
+function probeKiloSignedIn(env, home) {
+  // Kilo Code CLI stores per-provider credentials in ~/.local/share/kilo/auth.json
+  // (keyed by provider, e.g. { deepseek: { key }, kilo: { access } }) and an
+  // account.json with an active account. Any non-empty credential entry means
+  // the CLI is signed in.
+  const auth = readJsonIfPresent(path.join(home, ".local", "share", "kilo", "auth.json"));
+  if (auth) {
+    const providers = Object.values(auth);
+    if (providers.some((entry) => entry && (entry.key || entry.access || entry.token))) {
+      return true;
+    }
+  }
+  const account = readJsonIfPresent(path.join(home, ".local", "share", "kilo", "account.json"));
+  if (account) {
+    if (account.active) return true;
+    if (account.accounts && Object.keys(account.accounts).length > 0) return true;
+  }
+  return false;
+}
+
+function probeMulticaSignedIn(env, home) {
+  // The Multica CLI stores a per-workspace token at
+  // ~/.multica/profiles/<workspace>/config.json.
+  const profilesDir = path.join(home, ".multica", "profiles");
+  if (!existsSync(profilesDir)) return false;
+  try {
+    for (const profile of readdirSync(profilesDir)) {
+      const config = readJsonIfPresent(path.join(profilesDir, profile, "config.json"));
+      if (config && typeof config.token === "string" && config.token) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 const SIGNED_IN_PROBES = {
   claude: probeClaudeSignedIn,
   codex: probeCodexSignedIn,
   gh: probeGhSignedIn,
   copilot: probeCopilotSignedIn,
   opencode: probeOpenCodeSignedIn,
+  kilo: probeKiloSignedIn,
+  multica: probeMulticaSignedIn,
 };
 
 function resolveSignedIn(name, env, home) {

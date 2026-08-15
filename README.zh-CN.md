@@ -110,17 +110,17 @@ npm start
 
 ## 本机 CLI 工具自动识别
 
-小队面板（「我的工具」）会扫描本机已安装的开发 CLI，并把它们列为可加入小队的工具型 Agent。默认名单对齐 Multica 的 20 个 Agent CLI 运行时（`claude`、`codex`、`cursor-agent`、`copilot`、`opencode`、`openclaw`、`hermes`、`pi`、`agy`、`codebuddy`、`deveco`、`grok`、`kimi`、`kiro-cli`、`qodercli`、`qoderclicn`、`qwen`、`qwenpaw`、`reasonix`、`traecli`），外加 `gh`、`git`、`node`、`npm`、`bun`、`python`、`uv`、`docker`、`kubectl`，名单可配置：
+小队面板（「我的工具」）会扫描本机已安装的 Agent CLI，并把它们列为可加入小队的工具型 Agent。检测范围只保留 Agent CLI 类工具——Multica 的 20 个 Agent CLI 运行时（`claude`、`codex`、`cursor-agent`、`copilot`、`opencode`、`openclaw`、`hermes`、`pi`、`agy`、`codebuddy`、`deveco`、`grok`、`kimi`、`kiro-cli`、`qodercli`、`qoderclicn`、`qwen`、`qwenpaw`、`reasonix`、`traecli`），外加 `kilo`、`omp`、`multica`。`git`、`node`、`npm`、`python`、`docker` 等通用开发工具默认不检测（名单可配置）：
 
 ```bash
 # 逗号分隔
-CODEX_TASKBOARD_CLI_TOOLS="claude,codex,gh,npx" npm start
+CODEX_TASKBOARD_CLI_TOOLS="claude,codex,kilo" npm start
 
 # 或 JSON 数组
-CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","gh"]' npm start
+CODEX_TASKBOARD_CLI_TOOLS_JSON='["claude","codex","kilo"]' npm start
 ```
 
-API：`GET /api/cli-tools`（检测结果：name、command、path、version、installed、authorized），`POST /api/cli-tools/:name/authorize` / `.../revoke`。已授权的工具会以 `source: "cli"` 出现在 Agent 名录中并可加入小队。面板打开时自动扫描，也可手动刷新。
+API：`GET /api/cli-tools`（检测结果：name、command、path、version、installed、`signedIn` 三态 true/false/null、authorized），`POST /api/cli-tools/:name/authorize` / `.../revoke`。`signedIn` 语义：`true` = 已安装且已登录（可用）；`false` = 已安装但未检测到登录/认证态，需先登录才能执行任务；`null` = 未安装或登录态不适用。已授权的工具会以 `source: "cli"` 出现在 Agent 名录中并可加入小队。面板打开时自动扫描，也可手动刷新。
 
 如需在前端实时重载模式下开发：
 
