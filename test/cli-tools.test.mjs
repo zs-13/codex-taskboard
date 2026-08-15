@@ -5,6 +5,7 @@ import path from "node:path";
 import { afterEach, test } from "node:test";
 
 import { createTaskboardServer } from "../server/index.mjs";
+import { MULTICA_RUNTIMES } from "../server/cli-tools.mjs";
 
 const runningApps = [];
 const temporaryDirectories = [];
@@ -63,15 +64,21 @@ test("cli-tools detection lists configured tools and persists authorization", as
   assert.equal(typeof git.command, "string");
   assert.equal(typeof git.installed, "boolean");
   assert.equal(typeof git.authorized, "boolean");
-  // Every scanned tool must carry the full detection shape for the UI.
+  // Every scanned tool must carry the full detection shape for the UI,
+  // including the three-state signedIn field.
   for (const tool of listed.body.tools) {
     assert.equal(typeof tool.name, "string");
     assert.equal(typeof tool.command, "string");
     assert.ok("path" in tool);
     assert.ok("version" in tool);
     assert.equal(typeof tool.installed, "boolean");
+    assert.ok(tool.signedIn === true || tool.signedIn === false || tool.signedIn === null);
     assert.equal(typeof tool.authorized, "boolean");
   }
+  // Tools that do not require login (git, node, ...) report signedIn: true
+  // when installed so the UI shows them as ready.
+  if (git.installed) assert.equal(git.signedIn, true);
+
 
   // Authorization must be idempotent and persisted.
   if (git.installed) {
@@ -122,4 +129,21 @@ test("cli-tools scan respects CODEX_TASKBOARD_CLI_TOOLS_JSON", async () => {
   // a plain file. We only assert the shape, not the installed flag.
   assert.equal(typeof fake.installed, "boolean");
   assert.equal(typeof fake.authorized, "boolean");
+});
+
+test("default CLI list includes the Multica 20 runtimes plus gh/common tools", async () => {
+  // Fresh server without cliToolNames override → default list is used.
+  const baseUrl = await startServer();
+
+  const listed = await request(baseUrl, "/api/cli-tools");
+  assert.equal(listed.response.status, 200);
+  const names = listed.body.tools.map((tool) => tool.name);
+
+  for (const runtime of MULTICA_RUNTIMES) {
+    assert.ok(names.includes(runtime), `default list should include ${runtime}`);
+  }
+  for (const extra of ["gh", "git", "node", "npm"]) {
+    assert.ok(names.includes(extra), `default list should keep ${extra}`);
+  }
+  assert.ok(listed.body.tools.length >= MULTICA_RUNTIMES.length + 4);
 });

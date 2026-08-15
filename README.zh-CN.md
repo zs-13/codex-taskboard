@@ -94,7 +94,7 @@ npm start
 
 ## 本机 CLI 工具自动识别
 
-小队面板（「我的工具」）会扫描本机已安装的开发 CLI，并把它们列为可加入小队的工具型 Agent。默认检测 `claude`、`codex`、`cursor`、`gh`、`git`、`node`、`npm`、`bun`、`python`、`uv`、`docker`、`kubectl`，名单可配置：
+小队面板（「我的工具」）会扫描本机已安装的开发 CLI，并把它们列为可加入小队的工具型 Agent。默认名单对齐 Multica 的 20 个 Agent CLI 运行时（`claude`、`codex`、`cursor-agent`、`copilot`、`opencode`、`openclaw`、`hermes`、`pi`、`agy`、`codebuddy`、`deveco`、`grok`、`kimi`、`kiro-cli`、`qodercli`、`qoderclicn`、`qwen`、`qwenpaw`、`reasonix`、`traecli`），外加 `gh`、`git`、`node`、`npm`、`bun`、`python`、`uv`、`docker`、`kubectl`，名单可配置：
 
 ```bash
 # 逗号分隔

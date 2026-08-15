@@ -863,6 +863,7 @@ export class TaskboardDatabase {
         path TEXT,
         version TEXT,
         installed INTEGER NOT NULL DEFAULT 0,
+        signed_in INTEGER,
         authorized INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL
       );
@@ -958,6 +959,11 @@ export class TaskboardDatabase {
     }
     if (!agentColumns.some((column) => column.name === "authorized")) {
       this.database.exec("ALTER TABLE agents ADD COLUMN authorized INTEGER NOT NULL DEFAULT 0");
+    }
+
+    const cliToolColumns = this.database.prepare("PRAGMA table_info(cli_tools)").all();
+    if (!cliToolColumns.some((column) => column.name === "signed_in")) {
+      this.database.exec("ALTER TABLE cli_tools ADD COLUMN signed_in INTEGER");
     }
 
     const idempotencyColumns = this.database.prepare("PRAGMA table_info(idempotency_keys)").all();
@@ -2399,6 +2405,7 @@ export class TaskboardDatabase {
       path: row.path,
       version: row.version,
       installed: Boolean(row.installed),
+      signedIn: row.signed_in === null ? null : Boolean(row.signed_in),
       authorized: Boolean(row.authorized),
       updatedAt: row.updated_at,
     }));
@@ -2406,14 +2413,18 @@ export class TaskboardDatabase {
 
   upsertCliTool(tool, actor) {
     const timestamp = now();
+    const signedIn = tool.signedIn === undefined || tool.signedIn === null
+      ? null
+      : tool.signedIn ? 1 : 0;
     this.database.prepare(`
-      INSERT INTO cli_tools (name, command, path, version, installed, authorized, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO cli_tools (name, command, path, version, installed, signed_in, authorized, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE SET
         command = excluded.command,
         path = excluded.path,
         version = excluded.version,
         installed = excluded.installed,
+        signed_in = excluded.signed_in,
         updated_at = excluded.updated_at
     `).run(
       tool.name,
@@ -2421,6 +2432,7 @@ export class TaskboardDatabase {
       tool.path,
       tool.version,
       tool.installed ? 1 : 0,
+      signedIn,
       tool.authorized ? 1 : 0,
       timestamp,
     );
