@@ -2431,13 +2431,26 @@ async function main() {
         } catch (_) {}
       }
       if (idleAfterNormalExit) {
-        if (!hasOpenPending()) continue;
-        try {
-          await startManagedCodex();
+        if (!hasOpenPending()) {
+          // A debuggable Codex may have reappeared on this port (for example
+          // the user reopened it through the launcher, which launches Codex
+          // with the CDP flag). Re-attach automatically instead of staying
+          // idle forever so the sidebar panel comes back on its own.
+          const reappeared = await isReachable(cdpVersionUrl);
+          if (!reappeared) continue;
+          if (options.launch) {
+            managedCodex = managedCodexProcess(options.appPath);
+          }
+          cdpRuntime = tcpCdpRuntime(options.port);
           idleAfterNormalExit = false;
-        } catch (restartError) {
-          console.error(`Waiting to restart Codex: ${restartError.message}`);
-          continue;
+        } else {
+          try {
+            await startManagedCodex();
+            idleAfterNormalExit = false;
+          } catch (restartError) {
+            console.error(`Waiting to restart Codex: ${restartError.message}`);
+            continue;
+          }
         }
       }
       try {
