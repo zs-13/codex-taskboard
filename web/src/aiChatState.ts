@@ -86,10 +86,11 @@ export function reasoningEffortForModel(
   const current = currentEffort ?? "";
   const currentIndex = REASONING_EFFORTS.indexOf(current);
   if (currentIndex < 0) return model.defaultReasoningEffort;
-  if (model.supportedReasoningEfforts.includes(current)) {
+  const supported = model.supportedReasoningEfforts ?? [];
+  if (supported.includes(current)) {
     return current;
   }
-  const nearestEffort = model.supportedReasoningEfforts
+  const nearestEffort = supported
     .map((effort) => ({ effort, index: REASONING_EFFORTS.indexOf(effort) }))
     .filter(({ index }) => index >= 0)
     .sort((left, right) => (

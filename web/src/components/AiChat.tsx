@@ -2640,7 +2640,7 @@ export function AiChat({
                       </button>
                       <strong>{text("推理强度", "Reasoning effort")}</strong>
                     </header>
-                    {selectedModel.supportedReasoningEfforts.map((effort) => (
+                    {(selectedModel.supportedReasoningEfforts ?? []).map((effort) => (
                       <button
                         type="button"
                         role="menuitemradio"

@@ -428,7 +428,8 @@ export class AiChatService {
   }
 
   #validateReasoningEffort(model, reasoningEffort) {
-    if (!model.supportedReasoningEfforts.includes(reasoningEffort)) {
+    const supported = model.supportedReasoningEfforts ?? [];
+    if (!supported.includes(reasoningEffort)) {
       throw new ApiError(
         400,
         "INVALID_REASONING_EFFORT",
