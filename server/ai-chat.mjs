@@ -582,7 +582,19 @@ export class AiChatService {
       const taskThread = this.database.getAiChatThread(run.threadId);
       const boundIssueId = taskThread?.origin?.issueId;
       if (boundIssueId) {
-        const terminalState = status === "completed" ? "completed" : status === "failed" ? "failed" : "interrupted";
+        // If the turn never claimed the task (it stayed `todo`), the execution
+        // state must return to idle so the task is claimable again. Otherwise a
+        // turn that was started but could not claim — the old fake-execution
+        // path — would leave the task permanently marked completed/failed.
+        let taskState;
+        try {
+          const task = this.database.getTask(boundIssueId);
+          taskState = task && task.status === "todo" ? "idle" : null;
+        } catch {
+          taskState = null;
+        }
+        const terminalState = taskState
+          ?? (status === "completed" ? "completed" : status === "failed" ? "failed" : "interrupted");
         try {
           this.database.setTaskExecutionState(boundIssueId, terminalState, {
             type: "agent",

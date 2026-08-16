@@ -78,7 +78,7 @@ async function waitForTask(baseUrl, taskId, predicate, timeoutMs = 5_000) {
   return task;
 }
 
-test("claiming a claimed task auto-executes via a headless AiChat turn", async () => {
+test("claiming a claimable task auto-executes via a headless AiChat turn without pre-claiming", async () => {
   const fixture = await createServerFixture();
   try {
     await request(fixture.baseUrl, "/api/agents", {
@@ -103,11 +103,20 @@ test("claiming a claimed task auto-executes via a headless AiChat turn", async (
       body: { agentId: "builder", ownerSessionId: "auto-execute-test", ttlSeconds: 900 },
     });
     assert.equal(claimed.response.status, 200);
-    assert.equal(claimed.body.task.status, "in_progress");
-    assert.equal(claimed.body.task.executionState, "claimed");
+    // Auto-execution must leave the task claimable so the headless turn claims
+    // it with its own conversation binding (pre-claiming caused fake execution).
+    assert.equal(claimed.body.task.status, "todo");
+    assert.equal(claimed.body.task.assignedAgentId, "builder");
+    assert.equal(claimed.body.task.lockOwner, null);
+    // The claim awaits the turn start, so by the time it returns the headless
+    // turn is already running (or at least claimed and about to run).
+    assert.ok(
+      ["claimed", "running"].includes(claimed.body.task.executionState),
+      `expected claimed/running, got ${claimed.body.task.executionState}`,
+    );
 
-    const executing = await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
-    assert.equal(executing.executionState, "running");
+    const progressed = await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState !== "claimed");
+    assert.notEqual(progressed.executionState, "claimed", "the headless turn should start and progress");
 
     const threads = await request(fixture.baseUrl, "/api/local/ai/threads");
     const taskThreads = threads.body.threads.filter((thread) => thread.origin.issueId === taskId);
@@ -159,7 +168,7 @@ test("auto-execute respects the per-task autoExecute toggle", async () => {
   }
 });
 
-test("the execute action starts a headless turn and reports completion state", async () => {
+test("the execute action does not duplicate an already-running auto-execution", async () => {
   const fixture = await createServerFixture();
   try {
     await request(fixture.baseUrl, "/api/agents", {
@@ -177,6 +186,8 @@ test("the execute action starts a headless turn and reports completion state", a
       },
     });
     const taskId = created.body.task.id;
+    // Claiming auto-starts the headless turn (and awaits it), so a subsequent
+    // execute action must not spawn a second turn.
     await request(fixture.baseUrl, `/api/tasks/${taskId}/claim`, {
       method: "POST",
       body: { agentId: "builder", ownerSessionId: "auto-execute-test", ttlSeconds: 900 },
@@ -187,12 +198,13 @@ test("the execute action starts a headless turn and reports completion state", a
       body: {},
     });
     assert.equal(executed.response.status, 200);
-    assert.equal(executed.body.started, true);
+    assert.equal(executed.body.started, false);
+    assert.equal(executed.body.reason, "already-running");
 
-    const finished = await waitForTask(fixture.baseUrl, taskId, (task) => (
-      task.executionState === "completed" || task.executionState === "failed"
+    const settled = await waitForTask(fixture.baseUrl, taskId, (task) => (
+      task.executionState !== "claimed" && task.executionState !== "running"
     ));
-    assert.equal(finished.executionState, "completed");
+    assert.ok(["idle", "completed", "failed", "interrupted"].includes(settled.executionState));
   } finally {
     await fixture.close();
   }
@@ -253,12 +265,14 @@ test("auto-execute reuses a healthy completed thread and does not duplicate thre
     const taskId = created.body.task.id;
 
     // First claim auto-executes and completes (fixture codex always completes).
+    // The fixture codex never claims the task, so once its turn ends the task
+    // returns to the claimable pool (execution state back to idle).
     await request(fixture.baseUrl, `/api/tasks/${taskId}/claim`, {
       method: "POST",
       body: { agentId: "builder", ownerSessionId: "auto-execute-test", ttlSeconds: 900 },
     });
     await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
-    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "completed" || task.executionState === "failed");
+    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "idle");
 
     const threads = await request(fixture.baseUrl, "/api/local/ai/threads");
     const taskThreads = threads.body.threads.filter((thread) => thread.origin.issueId === taskId);

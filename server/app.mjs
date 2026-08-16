@@ -28,7 +28,7 @@ import {
   createCloudProxy,
   isLocalCompanionRoute,
 } from "./cloud-proxy.mjs";
-import { ApiError, TaskboardDatabase } from "./database.mjs";
+import { ApiError, TaskboardDatabase, selectAgentForTask } from "./database.mjs";
 import { createJiraConfigStore } from "./jira-config.mjs";
 import { createJiraIntegration } from "./jira-integration.mjs";
 import { ProjectSummaryService } from "./project-summary.mjs";
@@ -1028,6 +1028,14 @@ function parseTaskClaim(body) {
   };
 }
 
+function parseTaskTrigger(body) {
+  assertPlainObject(body);
+  assertAllowedKeys(body, new Set(["agentId"]));
+  return {
+    agentId: stringField(body.agentId ?? null, "agentId", { nullable: true, maxLength: 96 }),
+  };
+}
+
 function parseTaskDependency(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set(["dependsOnTaskId"]));
@@ -1945,6 +1953,84 @@ export function createTaskboardServer(options = {}) {
       message: `e-taskboard 处理任务面板任务 ${task.identifier}，并同步进度状态。`,
     });
     return { started: true, thread, run };
+  }
+
+  // Auto-execute trigger: assign an executor (selecting one when none is given)
+  // without claiming or locking, then start the headless turn. The turn claims
+  // the task itself, so the lock belongs to the executor's conversation session
+  // and the headless agent does not refuse an already-in_progress task it is not
+  // bound to. Hard conflicts (blocked, locked, skill mismatch, already assigned,
+  // dependency pending) throw ApiError so claim/trigger responses keep the 409
+  // contract; only soft conditions return a structured "not started" result.
+  async function triggerAutoExecute(taskId, input, actor) {
+    const task = database.getTask(taskId);
+    if (!task || task.archivedAt != null) {
+      throw new ApiError(404, "TASK_NOT_FOUND", `Task '${taskId}' does not exist`);
+    }
+    if (task.blocked || task.status === "blocked") {
+      throw new ApiError(409, "TASK_BLOCKED", "Blocked tasks cannot be auto-executed until the blocker is cleared");
+    }
+    if (task.controlStatus === "paused" || task.controlStatus === "terminated") {
+      throw new ApiError(409, "TASK_CONTROLLED", `Task is ${task.controlStatus}`);
+    }
+    if (task.lockOwner) {
+      throw new ApiError(409, "TASK_LOCKED", "Task is already locked by another agent", {
+        owner: task.lockOwner,
+        expiresAt: task.lockExpiresAt,
+      });
+    }
+    if (task.status !== "todo") {
+      throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Only claimable todo tasks can be auto-executed");
+    }
+    if (!autoExecuteEnabledForTask(task)) {
+      return { started: false, reason: "auto-execute-disabled" };
+    }
+    if (database.listAiChatThreadsForIssue(task.id).some((candidate) => candidate.currentRun)) {
+      return { started: false, reason: "already-running" };
+    }
+    const agent = selectAgentForTask(database, task, input.agentId ?? task.assignedAgentId ?? null);
+    const assigned = database.assignTaskForAutoExecute(task.id, agent.id, actor);
+    let result;
+    try {
+      result = await autoExecuteTask(assigned);
+    } catch (error) {
+      // The turn failed to start (e.g. Codex unavailable); keep the task
+      // claimable so the runner can retry, rather than leaving a half-started
+      // execution state behind.
+      database.setTaskExecutionState(assigned.id, "idle", actor);
+      return { started: false, reason: "start-failed", error: error.message };
+    }
+    return {
+      started: result.started,
+      task: database.getTask(task.id),
+      reason: result.reason ?? null,
+      agentId: agent.id,
+    };
+  }
+
+  // Return a stuck/orphaned task (pre-claimed, marked running/completed, but
+  // never actually executed) to the claimable pool so the runner can re-trigger
+  // it under the executor-claims-itself mechanism. Refuses when a turn is
+  // actively running or a valid lock is held.
+  function recoverStuckTask(taskId, actor) {
+    const task = database.getTask(taskId);
+    if (!task || task.archivedAt != null) {
+      return { recovered: false, reason: "not-found" };
+    }
+    if (task.status !== "todo" && task.status !== "in_progress") {
+      return { recovered: false, reason: "not-stuck", task };
+    }
+    if (task.executionState === "idle") {
+      return { recovered: false, reason: "not-stuck", task };
+    }
+    if (database.listAiChatThreadsForIssue(task.id).some((candidate) => candidate.currentRun)) {
+      return { recovered: false, reason: "active-run", task };
+    }
+    if (task.lockOwner && task.lockExpiresAt && new Date(task.lockExpiresAt).getTime() > Date.now()) {
+      return { recovered: false, reason: "valid-lock", task };
+    }
+    const reset = database.resetStuckTaskForReclaim(task.id, actor);
+    return { recovered: true, task: reset };
   }
 
   async function findCodexSession(threadId) {
@@ -2874,7 +2960,7 @@ export function createTaskboardServer(options = {}) {
       }
 
       const extendedTaskRoute = pathname.match(
-        /^\/api\/tasks\/([^/]+)\/(assign|block|control|lock|claim|dependencies|autonomous-step|execute)$/,
+        /^\/api\/tasks\/([^/]+)\/(assign|block|control|lock|claim|dependencies|autonomous-step|execute|trigger|recover)$/,
       );
       if (extendedTaskRoute) {
         const taskId = decodeRouteSegment(extendedTaskRoute[1], "Task id");
@@ -2909,12 +2995,28 @@ export function createTaskboardServer(options = {}) {
           return sendJson(response, 200, { task });
         }
         if (action === "claim") {
-          task = database.claimTaskForAgent(taskId, parseTaskClaim(await readJson(request)), actor);
-          events.emit("task.claimed", { task });
-          if (autoExecuteEnabledForTask(task)) {
-            void autoExecuteTask(task).catch(() => {});
+          const input = parseTaskClaim(await readJson(request));
+          const current = database.getTask(taskId);
+          if (autoExecuteEnabledForTask(current)) {
+            // Auto-execution must be started with the task still claimable so
+            // the headless turn claims it with its own conversation binding.
+            // Pre-claiming/locking here would make the headless turn see an
+            // in_progress task it is not bound to and refuse — fake execution.
+            const result = await triggerAutoExecute(taskId, { agentId: input.agentId }, actor);
+            return sendJson(response, 200, { task: result.task ?? current, ...result });
           }
+          task = database.claimTaskForAgent(taskId, input, actor);
+          events.emit("task.claimed", { task });
           return sendJson(response, 200, { task });
+        }
+        if (action === "trigger") {
+          const result = await triggerAutoExecute(taskId, parseTaskTrigger(await readJson(request)), actor);
+          return sendJson(response, 200, result);
+        }
+        if (action === "recover") {
+          const result = recoverStuckTask(taskId, actor);
+          events.emit("task.reset_for_reclaim", result);
+          return sendJson(response, 200, result);
         }
         if (action === "execute") {
           const result = await autoExecuteTask(database.getTask(taskId));

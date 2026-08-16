@@ -106,6 +106,7 @@ test("collaboration extension closes the local squad workflow loop", async () =>
       status: "todo",
       priority: "high",
       labels: ["delivery"],
+      autoExecute: false,
     },
   });
   assert.equal(task.response.status, 201);
@@ -130,6 +131,7 @@ test("collaboration extension closes the local squad workflow loop", async () =>
       status: "todo",
       priority: "medium",
       labels: ["sqlite"],
+      autoExecute: false,
     },
   });
   assert.equal(claimedTask.response.status, 201);
@@ -158,6 +160,7 @@ test("collaboration extension closes the local squad workflow loop", async () =>
       status: "todo",
       priority: "medium",
       labels: ["finance"],
+      autoExecute: false,
     },
   });
   assert.equal(mismatch.response.status, 201);
@@ -188,6 +191,7 @@ test("collaboration extension closes the local squad workflow loop", async () =>
       status: "todo",
       priority: "medium",
       labels: [],
+      autoExecute: false,
     },
   });
   assert.equal(dependency.response.status, 201);
@@ -247,7 +251,7 @@ test("terminal task states release the execution lock", async () => {
   async function claimAndLock(title) {
     const task = await request(baseUrl, "/api/tasks", {
       method: "POST",
-      body: { projectId: "local", title, status: "todo", priority: "medium", labels: ["frontend"] },
+      body: { projectId: "local", title, status: "todo", priority: "medium", labels: ["frontend"], autoExecute: false },
     });
     const claim = await request(baseUrl, `/api/tasks/${task.body.task.id}/claim`, {
       method: "POST",

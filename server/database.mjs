@@ -217,6 +217,48 @@ function delegationColumns(assignedAgentId, squadId) {
   };
 }
 
+// Shared executor selection used by claim and auto-execute trigger: prefer an
+// explicit agent, otherwise pick the best available runtime by skill tags and
+// CLI readiness. Test/scratch agents must never win the default selection.
+const TEST_AGENT_PREFIXES = [
+  "assigned-mismatch-",
+  "autotest-",
+  "guard-agent",
+  "builder-",
+  "reviewer-",
+];
+export function selectAgentForTask(database, task, explicitAgentId) {
+  const agents = database.listAgents();
+  const labels = new Set(task.labels.map((label) => label.toLowerCase()));
+  const score = (agent) => agent.skills.filter((skill) => labels.has(skill.toLowerCase())).length;
+  const isTestAgent = (agent) => TEST_AGENT_PREFIXES.some((prefix) => agent.id.startsWith(prefix));
+  const selectedAgent = explicitAgentId
+    ? agents.find((agent) => agent.id === explicitAgentId)
+    : [...agents]
+      .filter((agent) => !isTestAgent(agent))
+      .sort((left, right) => {
+        // Prefer authorized, signed-in CLI runtimes over manual agents.
+        const leftReady = left.source === "cli" && left.authorized && left.signedIn !== false ? 1 : 0;
+        const rightReady = right.source === "cli" && right.authorized && right.signedIn !== false ? 1 : 0;
+        if (leftReady !== rightReady) return rightReady - leftReady;
+        return score(right) - score(left) || left.name.localeCompare(right.name);
+      })[0];
+  if (!selectedAgent) {
+    throw new ApiError(404, "AGENT_NOT_FOUND", explicitAgentId
+      ? `Agent '${explicitAgentId}' does not exist`
+      : "Create an agent before claiming tasks");
+  }
+  const explicitlyAssignedToSelected = task.assignedAgentId === selectedAgent.id;
+  if (labels.size > 0 && score(selectedAgent) === 0 && !explicitlyAssignedToSelected) {
+    throw new ApiError(409, "NO_SKILL_MATCH", "Agent skills do not match this task's routing tags", {
+      agentId: selectedAgent.id,
+      taskLabels: task.labels,
+      agentSkills: selectedAgent.skills,
+    });
+  }
+  return selectedAgent;
+}
+
 function relationActivityValue(type, task) {
   return {
     type,
@@ -2826,6 +2868,136 @@ export class TaskboardDatabase {
     return task;
   }
 
+  // Auto-execute trigger path: assign an executor without claiming or locking,
+  // leaving the task in `todo` so the headless turn can claim it with its own
+  // conversation binding. Locking up front makes the headless turn see a task
+  // already `in_progress` that is not bound to its conversation and refuse to
+  // work — the fake-execution bug. Only a claimable todo task qualifies.
+  assignTaskForAutoExecute(id, agentId, actor) {
+    const current = this.#requireTask(id);
+    const timestamp = now();
+    if (current.archivedAt !== null) {
+      throw new ApiError(409, "TASK_ARCHIVED", "Archived tasks cannot be auto-executed");
+    }
+    if (current.blocked || current.status === "blocked") {
+      throw new ApiError(409, "TASK_BLOCKED", "Blocked tasks cannot be auto-executed until the blocker is cleared");
+    }
+    if (current.controlStatus === "paused" || current.controlStatus === "terminated") {
+      throw new ApiError(409, "TASK_CONTROLLED", `Task is ${current.controlStatus}`);
+    }
+    if (current.status !== "todo") {
+      throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Only claimable todo tasks can be auto-executed");
+    }
+    if (current.lockOwner) {
+      throw new ApiError(409, "TASK_LOCKED", "Task is already locked by another agent", {
+        owner: current.lockOwner,
+        expiresAt: current.lockExpiresAt,
+      });
+    }
+    if (current.assignedAgentId && current.assignedAgentId !== agentId) {
+      throw new ApiError(409, "TASK_ALREADY_ASSIGNED", "Task is already assigned to another agent", {
+        assignedAgentId: current.assignedAgentId,
+      });
+    }
+    const pendingDependencies = this.database.prepare(`
+      SELECT dependencies.id, dependencies.identifier, dependencies.title, dependencies.status
+      FROM task_dependencies
+      JOIN tasks AS dependencies ON dependencies.id = task_dependencies.depends_on_task_id
+      WHERE task_dependencies.task_id = ? AND dependencies.status != 'done'
+      ORDER BY dependencies.sort_order, dependencies.created_at, dependencies.id
+    `).all(current.id);
+    if (pendingDependencies.length > 0) {
+      throw new ApiError(409, "DEPENDENCY_PENDING", "Task dependencies must be completed before an agent can claim it", {
+        dependencies: pendingDependencies,
+      });
+    }
+    assertDelegationExists(this.database, agentId, null);
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = this.database.prepare(`
+        UPDATE tasks
+        SET assigned_agent_id = ?, execution_state = 'claimed', version = version + 1, updated_at = ?
+        WHERE id = ? AND version = ?
+      `).run(agentId, timestamp, current.id, current.version);
+      if (result.changes !== 1) this.#throwMissingOrConflict(id, current.version);
+      this.#recordTaskActivity(current.id, actor, taskFieldChanges(current, {
+        assignedAgentId: agentId,
+        executionState: "claimed",
+      }), timestamp);
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+    const task = this.getTask(current.id);
+    this.recordActivity({
+      projectId: task.projectId,
+      taskId: task.id,
+      actor,
+      eventType: "task.auto_execute_triggered",
+      message: `Auto-execution triggered for ${task.identifier} (assigned to ${agentId})`,
+      payload: { agentId },
+    });
+    return task;
+  }
+
+  // Return a stuck/orphaned task to the claimable pool. Safe only when no AiChat
+  // turn is actively running and no valid lock is held; used to unstick tasks
+  // that were pre-claimed and marked running/completed but never actually
+  // executed (fake execution), so the runner can re-trigger them under the new
+  // executor-claims-itself mechanism.
+  resetStuckTaskForReclaim(id, actor) {
+    const current = this.#requireTask(id);
+    const timestamp = now();
+    const activeThreads = this.listAiChatThreadsForIssue(id);
+    if (activeThreads.some((thread) => thread.currentRun)) {
+      throw new ApiError(409, "TASK_ACTIVE_RUN", "Task has an active AiChat run; refusing to reset");
+    }
+    if (current.lockOwner && current.lockExpiresAt) {
+      const lockValid = new Date(current.lockExpiresAt).getTime() > Date.now();
+      if (lockValid) {
+        throw new ApiError(409, "TASK_LOCKED", "Task still holds a valid lock; refusing to reset", {
+          owner: current.lockOwner,
+          expiresAt: current.lockExpiresAt,
+        });
+      }
+    }
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      this.database.prepare("DELETE FROM task_locks WHERE task_id = ?").run(current.id);
+      const result = this.database.prepare(`
+        UPDATE tasks
+        SET status = CASE WHEN status IN ('todo', 'in_progress') THEN 'todo' ELSE status END,
+          lock_owner = NULL, lock_expires_at = NULL, execution_state = 'idle',
+          version = version + 1, updated_at = ?
+        WHERE id = ?
+      `).run(timestamp, current.id);
+      if (result.changes !== 1) {
+        throw new ApiError(404, "TASK_NOT_FOUND", `Task '${id}' does not exist`);
+      }
+      this.#recordTaskActivity(current.id, actor, taskFieldChanges(current, {
+        status: "todo",
+        lockOwner: null,
+        lockExpiresAt: null,
+        executionState: "idle",
+      }), timestamp);
+      this.database.exec("COMMIT");
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+    const task = this.getTask(current.id);
+    this.recordActivity({
+      projectId: task.projectId,
+      taskId: task.id,
+      actor,
+      eventType: "task.reset_for_reclaim",
+      message: `Stuck task ${task.identifier} reset to claimable`,
+      payload: { previousStatus: current.status, previousExecutionState: current.executionState },
+    });
+    return task;
+  }
+
   setTaskBlocked(id, version, input, actor) {
     const current = this.#requireTask(id);
     this.#requireVersion(current, version);
@@ -2948,44 +3120,7 @@ export class TaskboardDatabase {
       throw new ApiError(409, "TASK_NOT_CLAIMABLE", "Only backlog, todo, or in-progress tasks can be claimed");
     }
 
-    const agents = this.listAgents();
-    const labels = new Set(task.labels.map((label) => label.toLowerCase()));
-    const score = (agent) => agent.skills.filter((skill) => labels.has(skill.toLowerCase())).length;
-    // Test/scratch agents from adversarial or autotest runs must never win the
-    // default selection: they are not real runtimes and would claim demo work
-    // that should go to a signed-in CLI agent.
-    const TEST_AGENT_PREFIXES = [
-      "assigned-mismatch-",
-      "autotest-",
-      "guard-agent",
-      "builder-",
-      "reviewer-",
-    ];
-    const isTestAgent = (agent) => TEST_AGENT_PREFIXES.some((prefix) => agent.id.startsWith(prefix));
-    const selectedAgent = input.agentId
-      ? agents.find((agent) => agent.id === input.agentId)
-      : [...agents]
-        .filter((agent) => !isTestAgent(agent))
-        .sort((left, right) => {
-          // Prefer authorized, signed-in CLI runtimes over manual agents.
-          const leftReady = left.source === "cli" && left.authorized && left.signedIn !== false ? 1 : 0;
-          const rightReady = right.source === "cli" && right.authorized && right.signedIn !== false ? 1 : 0;
-          if (leftReady !== rightReady) return rightReady - leftReady;
-          return score(right) - score(left) || left.name.localeCompare(right.name);
-        })[0];
-    if (!selectedAgent) {
-      throw new ApiError(404, "AGENT_NOT_FOUND", input.agentId
-        ? `Agent '${input.agentId}' does not exist`
-        : "Create an agent before claiming tasks");
-    }
-    const explicitlyAssignedToSelected = task.assignedAgentId === selectedAgent.id;
-    if (labels.size > 0 && score(selectedAgent) === 0 && !explicitlyAssignedToSelected) {
-      throw new ApiError(409, "NO_SKILL_MATCH", "Agent skills do not match this task's routing tags", {
-        agentId: selectedAgent.id,
-        taskLabels: task.labels,
-        agentSkills: selectedAgent.skills,
-      });
-    }
+    const selectedAgent = selectAgentForTask(this, task, input.agentId);
 
     const pendingDependencies = this.database.prepare(`
       SELECT dependencies.id, dependencies.identifier, dependencies.title, dependencies.status
