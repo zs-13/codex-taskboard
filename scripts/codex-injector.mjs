@@ -1630,6 +1630,37 @@ async function startTaskConversationViaCdp(cdp, executionContextId, request) {
       const threadId = typeof started.result.value === "string" ? started.result.value : "";
       if (threadId && threadId !== previousThreadId) {
         discoveredThreadId = threadId;
+
+        // Naming the conversation is cosmetic and must not hold up the task
+        // connection: run it in the background while the workspace root is
+        // confirmed, and return as soon as the thread is usable.
+        const nameSetPromise = (async () => {
+          try {
+            await requestCodexAppServerViaCdp(
+              cdp,
+              executionContextId,
+              codexHostId,
+              "thread/name/set",
+              { threadId, name: title },
+              10_000,
+            );
+          } catch (error) {
+            const message = error instanceof Error
+              ? error.message.toLowerCase()
+              : String(error).toLowerCase();
+            if (!message.includes("rollout") || !message.includes("is empty")) throw error;
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            await requestCodexAppServerViaCdp(
+              cdp,
+              executionContextId,
+              codexHostId,
+              "thread/name/set",
+              { threadId, name: title },
+              10_000,
+            );
+          }
+        })().catch(() => {});
+
         const readyDeadline = Date.now() + 10_000;
         let ready = false;
         while (Date.now() < readyDeadline) {
@@ -1654,49 +1685,8 @@ async function startTaskConversationViaCdp(cdp, executionContextId, request) {
         }
         if (!ready) throw new Error("Codex did not confirm the task conversation workspace root");
 
-        try {
-          await requestCodexAppServerViaCdp(
-            cdp,
-            executionContextId,
-            codexHostId,
-            "thread/name/set",
-            { threadId, name: title },
-            10_000,
-          );
-        } catch (error) {
-          const message = error instanceof Error
-            ? error.message.toLowerCase()
-            : String(error).toLowerCase();
-          if (!message.includes("rollout") || !message.includes("is empty")) throw error;
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          await requestCodexAppServerViaCdp(
-            cdp,
-            executionContextId,
-            codexHostId,
-            "thread/name/set",
-            { threadId, name: title },
-            10_000,
-          );
-        }
-
-        const titleDeadline = Date.now() + 10_000;
-        while (Date.now() < titleDeadline) {
-          try {
-            const result = await requestCodexAppServerViaCdp(
-              cdp,
-              executionContextId,
-              codexHostId,
-              "thread/read",
-              { threadId, includeTurns: false },
-              10_000,
-            );
-            if (result?.thread?.id === threadId && result.thread.name === title) {
-              return { threadId, title };
-            }
-          } catch {}
-          await new Promise((resolve) => setTimeout(resolve, 80));
-        }
-        throw new Error("Codex did not confirm the task conversation title");
+        void nameSetPromise;
+        return { threadId, title };
       }
       await new Promise((resolve) => setTimeout(resolve, 80));
     }
