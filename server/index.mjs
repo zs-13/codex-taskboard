@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -14,6 +14,11 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 // clone, so a brand-new install would otherwise 404 on the panel page. Build it
 // once on startup when it is missing; after that the build exists and this is a
 // no-op. Covers every launch path (start-taskboard, plugin injector, npm start).
+//
+// The build is NON-BLOCKING on purpose: the injector starts this server and
+// waits a short window for /health, so blocking on a cold vite build here would
+// make it time out and tear the whole stack down. Listening immediately keeps
+// the service reachable; the panel appears once the background build finishes.
 function ensureWebAssets() {
   const indexHtml = path.join(projectRoot, "dist", "web", "index.html");
   if (existsSync(indexHtml)) return;
@@ -22,15 +27,20 @@ function ensureWebAssets() {
     console.warn("Web panel bundle missing and vite is not installed; run 'npm install' then 'npm run build:web'.");
     return;
   }
-  console.log("Web panel bundle not found - building it once (npm run build:web) ...");
-  const result = spawnSync(
+  console.log("Web panel bundle not found - building it in the background (npm run build:web) ...");
+  const build = spawn(
     process.execPath,
     [viteBin, "build", "--config", "web/vite.config.ts"],
     { cwd: projectRoot, stdio: "inherit", windowsHide: true },
   );
-  if (result.status !== 0) {
-    console.warn(`Web panel build failed (status ${result.status}); the panel page may 404. Run 'npm run build:web' manually.`);
-  }
+  build.once("error", (error) => {
+    console.warn(`Web panel build failed to start: ${error.message}`);
+  });
+  build.once("exit", (code) => {
+    if (code !== 0) {
+      console.warn(`Web panel build failed (status ${code}); the panel page may 404. Run 'npm run build:web' manually.`);
+    }
+  });
 }
 
 async function main() {

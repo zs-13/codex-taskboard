@@ -102,7 +102,22 @@ if (-not (Test-Path (Join-Path $repoRoot "node_modules"))) {
   }
 }
 
-# 3. Resolve the Codex app path
+# 3. Build the web panel when the bundle is missing (fresh clone). This must
+#    finish before the injector starts the service, so the injected panel frame
+#    is never pointed at a 404. (The server also self-heals in the background
+#    for direct `npm start`, but blocking here keeps the first run deterministic.)
+if (-not (Test-Path (Join-Path $repoRoot "dist\web\index.html"))) {
+  Write-Host "Web panel bundle not found - building it (npm run build:web) ..."
+  Push-Location $repoRoot
+  try {
+    & npm run build:web
+    if ($LASTEXITCODE -ne 0) { throw "npm run build:web failed with exit code $LASTEXITCODE" }
+  } finally {
+    Pop-Location
+  }
+}
+
+# 4. Resolve the Codex app path
 if (-not $CodexAppPath -and $env:CODEX_TASKBOARD_CODEX_APP_PATH) {
   $CodexAppPath = $env:CODEX_TASKBOARD_CODEX_APP_PATH
 }
@@ -127,7 +142,7 @@ if (-not $CodexAppPath) {
   }
 }
 
-# 4. Launch Codex with CDP when it is not already reachable, or when the
+# 5. Launch Codex with CDP when it is not already reachable, or when the
 #    existing instance is orphaned (the window was closed but the process
 #    lingers and still owns the port) or a restart was requested with -Force.
 $cdpUrl = "http://127.0.0.1:$Port/json/version"
@@ -184,7 +199,7 @@ if (-not $cdpOk) {
   Write-Host "Codex CDP already reachable on port $Port."
 }
 
-# 5. Run the injector (watch + open). Its supervisor starts the Taskboard
+# 6. Run the injector (watch + open). Its supervisor starts the Taskboard
 #    service and writes .data/launcher-runtime.json.
 #
 #    First check whether a taskboard instance is already serving the service
@@ -227,7 +242,7 @@ if (-not (Has-NodeProcess "scripts\codex-injector.mjs" $Port)) {
   Write-Host "Taskboard injector already running."
 }
 
-# 6. Wait for the runtime file (the service URL) so the agent runner can attach.
+# 7. Wait for the runtime file (the service URL) so the agent runner can attach.
 $runtimeReady = $false
 if ($runningBaseUrl) { $runtimeReady = $true }
 $deadline = (Get-Date).AddSeconds(30)
@@ -236,7 +251,7 @@ while (-not $runtimeReady -and (Get-Date) -lt $deadline) {
   Start-Sleep -Milliseconds 500
 }
 
-# 7. Run the agent runner (agents claiming & executing tasks) when not running.
+# 8. Run the agent runner (agents claiming & executing tasks) when not running.
 if (-not (Has-NodeProcess "scripts\taskboard-agent-runner.mjs")) {
   Write-Host "Starting Taskboard agent runner ..."
   $runnerOut = Join-Path $logDir "agent-runner.log"
@@ -248,7 +263,7 @@ if (-not (Has-NodeProcess "scripts\taskboard-agent-runner.mjs")) {
   Write-Host "Taskboard agent runner already running."
 }
 
-# 8. Report
+# 9. Report
 $serviceUrl = "http://127.0.0.1:47823"
 Write-Host ""
 Write-Host "Taskboard service: $serviceUrl  (data: $dataDir\taskboard.sqlite)"
