@@ -103,6 +103,25 @@ The Taskboard panel lives in the **right sidebar of a Codex window the launcher 
 - Agents (via the bundled `manage-taskboard` skill / `taskctl` CLI) claim and execute issues; progress and comments sync live.
 - Data is stored locally (`.data/taskboard.sqlite` by default) and survives closing Codex. After a restart, reopen Codex through the same launcher command to bring the panel back.
 
+**Closing and reopening Codex (Windows)**
+
+Closing the Codex window can leave `ChatGPT.exe` processes behind with the CDP
+port still bound. If you then re-run the launcher it reports "Codex CDP already
+reachable" and skips launching, so no new window opens. Recover either way:
+
+- **One-click full stop:** run `scripts\stop-taskboard.bat`. It kills the
+  launcher-managed `ChatGPT.exe` processes and the background node processes
+  (service / injector / agent runner). Then `scripts\start-taskboard.bat` opens
+  a fresh window.
+- **Force restart:** run `scripts\start-taskboard.bat -Force` to stop the
+  residual Codex (and background processes) first, then start everything again.
+
+The launcher also auto-recovers residue on its own: when the CDP port is
+reachable but the managed Codex process is gone (or its window was closed while
+the process lingered), it cleans up and relaunches so a new window always opens.
+The stop script only targets the launcher profile, so Codex windows you opened
+from the Start menu / app icon are never touched.
+
 If the panel does not appear, the most common cause is opening Codex from the app icon instead of the launcher — see [Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls).
 
 ## Install as a native Codex plugin
@@ -312,7 +331,9 @@ how to avoid them:
 2. **Closing and reopening Codex clears the panel.** The panel lives inside the
    Codex window, so a restart removes it. The resident injector re-attaches
    automatically as soon as a debuggable Codex reappears on its port — reopen
-   Codex through the launcher and the panel comes back on its own.
+   Codex through the launcher and the panel comes back on its own. If a residual
+   process is holding the port and blocks the reopen, run `scripts\stop-taskboard.bat`
+   first, or use `scripts\start-taskboard.bat -Force`.
 
 3. **Run exactly one Taskboard.** Do not launch with a different CDP port each
    time. Every distinct port/profile spawns another Codex window, another
@@ -323,8 +344,9 @@ how to avoid them:
 
 4. **The service outlives Codex on purpose.** The service and agent runner keep
    running when Codex closes; that is what keeps task progress and history moving
-   in real time. Closing Codex does not delete tasks. To stop everything, stop
-   the service/injector/agent-runner processes or disable the logon autostart.
+   in real time. Closing Codex does not delete tasks. To stop everything, run
+   `scripts\stop-taskboard.bat` (Windows), which kills the launcher-managed
+   `ChatGPT.exe` and the background node processes, or disable the logon autostart.
 
 5. **One-click setup (Windows).** `scripts\setup-taskboard-autostart.ps1` creates
    a **Codex Taskboard** desktop shortcut (launcher on a fixed port) and registers

@@ -3,22 +3,30 @@
 # Starts the local Taskboard service, launches the Codex (ChatGPT) app with a
 # dedicated CDP port, injects the Taskboard sidebar entry, and keeps the agent
 # runner alive. Safe to run repeatedly: it only starts components that are not
-# already running.
+# already running. It also recovers from residual Codex processes: when the CDP
+# port is reachable but the managed Codex process is gone (or its window was
+# closed while the process lingered), it cleans up the residue and relaunches so
+# a new window always opens.
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/start-taskboard.ps1
 #   powershell -ExecutionPolicy Bypass -File scripts/start-taskboard.ps1 -Port 9232
 #   powershell -ExecutionPolicy Bypass -File scripts/start-taskboard.ps1 -CodexAppPath "C:\...\ChatGPT.exe"
+#   powershell -ExecutionPolicy Bypass -File scripts/start-taskboard.ps1 -Force
 #
 # Params:
 #   -Port          CDP debugging port used for injection (default 9232).
 #   -CodexAppPath  Explicit path to the Codex / ChatGPT.exe app. When omitted the
 #                  script scans WindowsApps for an OpenAI.Codex install. You can
 #                  also set the CODEX_TASKBOARD_CODEX_APP_PATH environment variable.
+#   -Force         Stop the managed Codex (and background node processes) first,
+#                  then start everything fresh. Use this when a closed Codex
+#                  window left a lingering process holding the CDP port.
 
 param(
   [int]$Port = 9232,
-  [string]$CodexAppPath = ""
+  [string]$CodexAppPath = "",
+  [switch]$Force
 )
 
 $ErrorActionPreference = "Stop"
@@ -36,23 +44,9 @@ $logDir = Join-Path $dataDir "logs"
 $runtimeFile = Join-Path $dataDir "launcher-runtime.json"
 New-Item -ItemType Directory -Force $dataDir, $logDir | Out-Null
 
-function Test-HttpOk($url) {
-  try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $url -TimeoutSec 2
-    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 300
-  } catch {
-    return $false
-  }
-}
-
-function Wait-HttpOk($url, $seconds) {
-  $deadline = (Get-Date).AddSeconds($seconds)
-  while ((Get-Date) -lt $deadline) {
-    if (Test-HttpOk $url) { return $true }
-    Start-Sleep -Milliseconds 500
-  }
-  return $false
-}
+# Shared helpers: Test-HttpOk / Wait-HttpOk and the managed Codex / node
+# process identification used for residue cleanup below.
+. (Join-Path $PSScriptRoot "taskboard-processes.ps1")
 
 function Has-NodeProcess($matchText, $portFilter = "") {
   $processes = Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction SilentlyContinue
@@ -101,9 +95,44 @@ if (-not $CodexAppPath) {
   }
 }
 
-# 4. Launch Codex with CDP when it is not already reachable
+# 4. Launch Codex with CDP when it is not already reachable, or when the
+#    existing instance is orphaned (the window was closed but the process
+#    lingers and still owns the port) or a restart was requested with -Force.
 $cdpUrl = "http://127.0.0.1:$Port/json/version"
-if (-not (Test-HttpOk $cdpUrl)) {
+$cdpOk = Test-HttpOk $cdpUrl
+$managedMain = Get-ManagedCodexMainProcess | Select-Object -First 1
+
+if ($Force) {
+  Write-Host "Force restart requested: stopping existing managed components first ..."
+  Stop-TaskboardNodeProcesses
+  Stop-ManagedCodex -cdpUrl $cdpUrl
+  $cdpOk = Test-HttpOk $cdpUrl
+  if ($cdpOk) {
+    Write-Warning "CDP port $Port is still reachable after stopping the managed Codex."
+    Write-Warning "Another (non-managed) process may be holding it. Pick a different port (-Port)."
+  }
+} elseif ($cdpOk -and -not $managedMain) {
+  # The port is reachable but no managed Codex main process owns it. If any
+  # launcher-profile residue remains, clean it up and relaunch; otherwise the
+  # port belongs to an unknown process and must not be touched.
+  if (@(Get-ManagedCodexProcesses).Count -gt 0) {
+    Write-Host "CDP port $Port is reachable but its managed Codex process is gone. Cleaning up the residue ..."
+    Stop-ManagedCodex -cdpUrl $cdpUrl
+    $cdpOk = Test-HttpOk $cdpUrl
+  } else {
+    Write-Warning "CDP port $Port is already in use by an unknown process (not a managed Codex)."
+    Write-Warning "Pick a different port (-Port) or free port $Port before continuing."
+  }
+} elseif ($cdpOk -and -not (Test-CdpWindowOpen $Port)) {
+  # The managed Codex main process is alive but exposes no window target: the
+  # window was closed while the process lingered. Restart it so a new window
+  # opens.
+  Write-Host "Existing managed Codex on port $Port has no open window. Restarting it ..."
+  Stop-ManagedCodex -cdpUrl $cdpUrl
+  $cdpOk = Test-HttpOk $cdpUrl
+}
+
+if (-not $cdpOk) {
   if (-not $CodexAppPath) {
     Write-Warning "Codex (ChatGPT.exe) not found. Install the Codex app from the Microsoft Store,"
     Write-Warning "or pass -CodexAppPath to point at the app. Continuing without launching Codex."
