@@ -369,6 +369,8 @@ export interface TaskDraft {
   priority: TaskPriority;
   labels: string[];
   assigneeTarget?: AssigneeTarget;
+  assignedAgentId?: string;
+  squadId?: string;
   developmentContext: DevelopmentContext | null;
   startDate: string | null;
   dueDate: string | null;
