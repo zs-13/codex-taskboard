@@ -1918,6 +1918,29 @@ export class TaskboardDatabase {
                 AND ai_chat_runs.status = 'running'
             )
         `).run(timestamp);
+        // Sync bound tasks so they do not keep showing a stale "running"
+        // execution state after their turn was interrupted by the restart.
+        this.database.prepare(`
+          UPDATE tasks
+          SET execution_state = CASE WHEN status = 'todo' THEN 'idle' ELSE 'interrupted' END,
+            updated_at = ?
+          WHERE execution_state IN ('claimed', 'running')
+            AND id IN (
+              SELECT origin_issue_id
+              FROM ai_chat_threads
+              WHERE origin_issue_id IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM ai_chat_runs
+                  WHERE ai_chat_runs.thread_id = ai_chat_threads.id
+                    AND ai_chat_runs.status = 'interrupted'
+                )
+                AND NOT EXISTS (
+                  SELECT 1 FROM ai_chat_runs
+                  WHERE ai_chat_runs.thread_id = ai_chat_threads.id
+                    AND ai_chat_runs.status = 'running'
+                )
+            )
+        `).run(timestamp);
       }
       this.database.exec("COMMIT");
       return Number(result.changes);
