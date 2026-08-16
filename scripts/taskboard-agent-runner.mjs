@@ -84,17 +84,20 @@ function isClaimable(task) {
 }
 
 // A task whose execution turn has ENDED (completed/failed/interrupted) while the
-// task is still todo/in_progress and was never bound to a conversation is an
-// orphaned fake execution: it was pre-claimed and marked done but no work was
-// produced. Reset it to the claimable pool so the executor can claim it for
-// real. Tasks with a `threadId` binding, a live executionState (claimed/running),
-// or a valid lock are being handled and must not be touched.
+// task is still todo/in_progress is an orphaned fake execution: it was
+// pre-claimed and marked done but no work was produced. Reset it to the
+// claimable pool so the executor can claim it for real. A task that is
+// `in_progress` and bound to a conversation was legitimately executed by a
+// headless turn (taskctl move sets the binding but not a lock), so it must not
+// be touched; a `todo` task with a stale binding is still unclaimed and
+// recoverable. Live executionStates (claimed/running) and valid locks also
+// mean the task is being handled.
 function isStuck(task) {
   if (!task || task.archivedAt != null || task.blocked === true) return false;
   if (task.controlStatus === "paused" || task.controlStatus === "terminated") return false;
   if (task.status !== "todo" && task.status !== "in_progress") return false;
   if (!["completed", "failed", "interrupted"].includes(task.executionState)) return false;
-  if (task.threadId || task.threadBinding) return false;
+  if (task.status === "in_progress" && (task.threadId || task.threadBinding)) return false;
   if (task.lockOwner && task.lockExpiresAt) {
     if (new Date(task.lockExpiresAt).getTime() > Date.now()) return false;
   }

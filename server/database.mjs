@@ -2969,6 +2969,8 @@ export class TaskboardDatabase {
         UPDATE tasks
         SET status = CASE WHEN status IN ('todo', 'in_progress') THEN 'todo' ELSE status END,
           lock_owner = NULL, lock_expires_at = NULL, execution_state = 'idle',
+          thread_id = NULL, thread_codex_project_id = NULL, thread_codex_project_kind = NULL,
+          thread_codex_host_id = NULL, thread_workspace_path = NULL,
           version = version + 1, updated_at = ?
         WHERE id = ?
       `).run(timestamp, current.id);
@@ -2980,6 +2982,7 @@ export class TaskboardDatabase {
         lockOwner: null,
         lockExpiresAt: null,
         executionState: "idle",
+        threadId: null,
       }), timestamp);
       this.database.exec("COMMIT");
     } catch (error) {

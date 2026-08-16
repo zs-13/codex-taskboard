@@ -2025,7 +2025,7 @@ export function createTaskboardServer(options = {}) {
     if (!["completed", "failed", "interrupted"].includes(task.executionState)) {
       return { recovered: false, reason: "not-stuck", task };
     }
-    if (task.threadId || task.threadBinding) {
+    if (task.status === "in_progress" && (task.threadId || task.threadBinding)) {
       // Bound to a conversation: a headless turn claimed it via taskctl move
       // (which does not take a task lock). It executed — do not reset.
       return { recovered: false, reason: "bound", task };
