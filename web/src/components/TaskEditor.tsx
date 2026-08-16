@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { FormEvent, KeyboardEvent } from "react";
-import { ApiError } from "../api";
+import type { FormEvent, KeyboardEvent, ReactNode } from "react";
+import { ApiError, listAgents, listSquads } from "../api";
 import {
   taskPriorityLabel,
   taskStatusLabel,
@@ -11,9 +11,12 @@ import {
   TASK_PRIORITIES,
   TASK_STATUSES,
   type ActorIdentity,
+  type AgentProfile,
+  type AssigneeTarget,
   type DevelopmentContext,
   type DevelopmentScan,
   type Recurrence,
+  type Squad,
   type Task,
   type TaskDraft,
   type TaskPriority,
@@ -79,6 +82,7 @@ export interface NewTaskEditorDraft {
   status: TaskStatus;
   priority: TaskPriority;
   assignee: ActorIdentity;
+  assignmentValue: string;
   selectedLabels: string[];
   developmentContext: DevelopmentContext | null;
   startDate: string;
@@ -86,6 +90,27 @@ export interface NewTaskEditorDraft {
   recurrence: Recurrence | null;
   attachments: File[];
   relations: NewTaskRelationDraft;
+}
+
+/** One entry of the unified assignee/delegation picker. Values use
+ * `actorKey(actor)` for users/Codex, `agent:<id>` for specific agents,
+ * and `squad:<id>` for squads. */
+interface AssignmentOption {
+  kind: "actor" | "agent" | "squad" | "retry";
+  value: string;
+  label: string;
+  icon: ReactNode;
+  className?: string;
+  groupLabel?: string;
+  actor?: ActorIdentity;
+  id?: string;
+  placeholder?: boolean;
+}
+
+const ASSIGNMENT_RETRY_VALUE = "__assignment_retry__";
+
+function agentActor(agent: AgentProfile): ActorIdentity {
+  return { type: "agent", id: agent.id, name: agent.name, avatarUrl: agent.avatarUrl };
 }
 
 interface TaskEditorProps {
@@ -171,7 +196,18 @@ export function TaskEditor({
   );
   const [status, setStatus] = useState<TaskStatus>(task?.status ?? initialStatus);
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? initialDraft?.priority ?? "none");
-  const [assignee, setAssignee] = useState<ActorIdentity>(task?.assignee ?? initialDraft?.assignee ?? currentUser);
+  const [assignmentValue, setAssignmentValue] = useState<string>(() => {
+    if (initialDraft?.assignmentValue) return initialDraft.assignmentValue;
+    if (task?.assignedAgentId) return `agent:${task.assignedAgentId}`;
+    if (task?.squadId) return `squad:${task.squadId}`;
+    return actorKey(task?.assignee ?? currentUser);
+  });
+  const [assignmentDirty, setAssignmentDirty] = useState(false);
+  const [agents, setAgents] = useState<AgentProfile[]>([]);
+  const [squads, setSquads] = useState<Squad[]>([]);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentError, setAssignmentError] = useState(false);
+  const [assignmentRetry, setAssignmentRetry] = useState(0);
   const [selectedLabels, setSelectedLabels] = useState<string[]>(task?.labels ?? initialDraft?.selectedLabels ?? []);
   const [developmentContext, setDevelopmentContext] = useState<DevelopmentContext | null>(task?.developmentContext ?? initialDraft?.developmentContext ?? null);
   const [startDate] = useState(task?.startDate ?? initialDraft?.startDate ?? "");
@@ -251,11 +287,103 @@ export function TaskEditor({
         : subIssueIds,
   );
 
-  const assigneeOptions = [task?.assignee, currentUser, CODEX_AGENT_ACTOR]
-    .filter((actor): actor is ActorIdentity => actor !== undefined)
-    .filter((actor, index, actors) => (
-      actors.findIndex((candidate) => actorKey(candidate) === actorKey(actor)) === index
-    ));
+  const missingAgent = task?.assignedAgentId
+    && !agents.some((agent) => agent.id === task.assignedAgentId)
+    ? task.assignedAgentId
+    : null;
+  const missingSquad = task?.squadId
+    && !squads.some((squad) => squad.id === task.squadId)
+    ? task.squadId
+    : null;
+
+  const assignmentOptions = useMemo((): AssignmentOption[] => {
+    const options: AssignmentOption[] = [];
+    const otherAssignee = task?.assignee
+      && actorKey(task.assignee) !== actorKey(currentUser)
+      && actorKey(task.assignee) !== actorKey(CODEX_AGENT_ACTOR)
+      ? task.assignee
+      : null;
+    if (otherAssignee) {
+      options.push({
+        kind: "actor",
+        value: actorKey(otherAssignee),
+        label: otherAssignee.name,
+        icon: <ActorAvatar actor={otherAssignee} className="task-property-assignee-avatar" />,
+      });
+    }
+    options.push({
+      kind: "actor",
+      value: actorKey(currentUser),
+      label: `${currentUser.name}${text("（我）", " (me)")}`,
+      icon: <ActorAvatar actor={currentUser} className="task-property-assignee-avatar" />,
+      groupLabel: text("当前用户", "Current user"),
+    });
+    options.push({
+      kind: "actor",
+      value: actorKey(CODEX_AGENT_ACTOR),
+      label: CODEX_AGENT_ACTOR.name,
+      icon: <ActorAvatar actor={CODEX_AGENT_ACTOR} className="task-property-assignee-avatar" />,
+      groupLabel: text("Codex Agent", "Codex Agent"),
+    });
+    const agentGroupLabel = text("具体智能体", "Agents");
+    const visibleAgents = agents.filter((agent) => agent.id !== CODEX_AGENT_ACTOR.id);
+    const agentPlaceholder = missingAgent ? {
+      kind: "agent" as const,
+      value: `agent:${missingAgent}`,
+      label: missingAgent,
+      icon: <ActorAvatar actor={{ type: "agent", id: missingAgent, name: missingAgent, avatarUrl: null }} className="task-property-assignee-avatar" />,
+      className: "is-unknown",
+      groupLabel: agentGroupLabel,
+      id: missingAgent,
+      placeholder: true,
+    } : null;
+    if (agentPlaceholder || visibleAgents.length > 0) {
+      if (agentPlaceholder) options.push(agentPlaceholder);
+      for (const agent of visibleAgents) {
+        options.push({
+          kind: "agent",
+          value: `agent:${agent.id}`,
+          label: agent.name,
+          icon: <ActorAvatar actor={agentActor(agent)} className="task-property-assignee-avatar" />,
+          groupLabel: agentGroupLabel,
+          id: agent.id,
+        });
+      }
+    }
+    const squadGroupLabel = text("小队", "Squads");
+    const squadPlaceholder = missingSquad ? {
+      kind: "squad" as const,
+      value: `squad:${missingSquad}`,
+      label: missingSquad,
+      icon: <LinearIcon name="myIssues" />,
+      className: "is-unknown",
+      groupLabel: squadGroupLabel,
+      id: missingSquad,
+      placeholder: true,
+    } : null;
+    if (squadPlaceholder || squads.length > 0) {
+      if (squadPlaceholder) options.push(squadPlaceholder);
+      for (const squad of squads) {
+        options.push({
+          kind: "squad",
+          value: `squad:${squad.id}`,
+          label: squad.name,
+          icon: <LinearIcon name="myIssues" />,
+          groupLabel: squadGroupLabel,
+          id: squad.id,
+        });
+      }
+    }
+    if (assignmentError) {
+      options.push({
+        kind: "retry",
+        value: ASSIGNMENT_RETRY_VALUE,
+        label: text("加载失败，点击重试", "Failed to load, click to retry"),
+        icon: <LinearIcon name="recurrence" />,
+      });
+    }
+    return options;
+  }, [agents, squads, currentUser, task, missingAgent, missingSquad, assignmentError, text]);
 
   useEffect(() => {
     dialogRef.current?.showModal();
@@ -264,6 +392,25 @@ export function TaskEditor({
       if (dialogRef.current?.open) dialogRef.current.close();
     };
   }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    setAssignmentLoading(true);
+    setAssignmentError(false);
+    void Promise.allSettled([
+      listAgents(controller.signal),
+      listSquads(controller.signal),
+    ]).then(([agentsResult, squadsResult]) => {
+      if (controller.signal.aborted) return;
+      setAgents(agentsResult.status === "fulfilled" ? agentsResult.value : []);
+      setSquads(squadsResult.status === "fulfilled" ? squadsResult.value : []);
+      setAssignmentError(
+        agentsResult.status === "rejected" || squadsResult.status === "rejected",
+      );
+      setAssignmentLoading(false);
+    });
+    return () => controller.abort();
+  }, [assignmentRetry]);
 
   useEffect(() => {
     if (menu !== "more" && menu !== "due" && menu !== "recurrence") return;
@@ -343,9 +490,31 @@ export function TaskEditor({
     setSaving(true);
     setError(null);
     try {
-      const assigneeTarget = task && actorKey(assignee) === actorKey(task.assignee)
-        ? undefined
-        : assigneeTargetForActor(assignee, currentUser);
+      const selection = assignmentOptions.find((option) => option.value === assignmentValue);
+      const taskAgentId = task?.assignedAgentId ?? null;
+      const taskSquadId = task?.squadId ?? null;
+      const taskHadDelegation = taskAgentId !== null || taskSquadId !== null;
+      let assigneeTarget: AssigneeTarget | undefined;
+      let assignedAgentId: string | undefined;
+      let squadId: string | undefined;
+      if (selection?.kind === "actor" && selection.actor) {
+        const target = assigneeTargetForActor(selection.actor, currentUser);
+        if (target) {
+          if (!task) {
+            assigneeTarget = target;
+          } else if (taskHadDelegation || actorKey(selection.actor) !== actorKey(task.assignee)) {
+            assigneeTarget = target;
+          }
+        }
+      } else if (selection?.kind === "agent" && selection.id) {
+        if (selection.id !== taskAgentId || (selection.placeholder && assignmentDirty)) {
+          assignedAgentId = selection.id;
+        }
+      } else if (selection?.kind === "squad" && selection.id) {
+        if (selection.id !== taskSquadId || (selection.placeholder && assignmentDirty)) {
+          squadId = selection.id;
+        }
+      }
       const descriptionValue = task
         ? description.trim()
         : serializeInlineMedia(descriptionSegments).trim();
@@ -356,6 +525,8 @@ export function TaskEditor({
         priority,
         labels: selectedLabels,
         ...(assigneeTarget ? { assigneeTarget } : {}),
+        ...(assignedAgentId ? { assignedAgentId } : {}),
+        ...(squadId ? { squadId } : {}),
         developmentContext,
         startDate: startDate || null,
         dueDate: dueDate || null,
@@ -379,6 +550,12 @@ export function TaskEditor({
         setError([
           "这个议题已在其他位置发生变更，请关闭并刷新后重试。",
           "This issue changed elsewhere. Close the editor, refresh, and try again.",
+        ]);
+      } else if (caught instanceof ApiError
+        && (caught.code === "AGENT_NOT_FOUND" || caught.code === "SQUAD_NOT_FOUND")) {
+        setError([
+          "委派对象已失效，请重新选择。",
+          "The delegation target is no longer available. Please choose again.",
         ]);
       } else {
         setError(caught instanceof Error
@@ -427,13 +604,26 @@ export function TaskEditor({
     setMenu(null);
   }
 
+  function handleAssignmentChange(value: string) {
+    if (value === ASSIGNMENT_RETRY_VALUE) {
+      setAssignmentRetry((current) => current + 1);
+      return;
+    }
+    setAssignmentValue(value);
+    setAssignmentDirty(true);
+  }
+
   function cancelEditor() {
+    const selectedActor = assignmentOptions.find((option) => (
+      option.kind === "actor" && option.value === assignmentValue
+    ));
     onCancel(task ? null : {
       title,
       descriptionSegments,
       status,
       priority,
-      assignee,
+      assignee: selectedActor?.actor ?? currentUser,
+      assignmentValue,
       selectedLabels,
       developmentContext,
       startDate,
@@ -568,22 +758,14 @@ export function TaskEditor({
               onChange={setPriority}
             />
             <TaskPropertyPicker
-              value={actorKey(assignee)}
-              options={assigneeOptions.map((actor) => ({
-                value: actorKey(actor),
-                label: actor.id === currentUser.id
-                  ? `${actor.name}${text("（我）", " (me)")}`
-                  : actor.name,
-                icon: <ActorAvatar actor={actor} className="task-property-assignee-avatar" />,
-              }))}
+              value={assignmentValue}
+              options={assignmentOptions}
               open={menu === "assignee"}
               triggerClassName="property-control property-assignee"
               ariaLabel={text("负责人", "Assignee")}
+              title={assignmentLoading ? text("正在加载智能体与小队…", "Loading agents and squads…") : undefined}
               onOpenChange={(open) => setMenu(open ? "assignee" : null)}
-              onChange={(value) => {
-                const selected = assigneeOptions.find((actor) => actorKey(actor) === value);
-                if (selected) setAssignee(selected);
-              }}
+              onChange={handleAssignmentChange}
             />
             <LabelPicker
               availableLabels={availableLabels}
