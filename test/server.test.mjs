@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHmac } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { access, chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { request as httpRequest } from "node:http";
 import os from "node:os";
@@ -7,6 +7,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, test } from "node:test";
 
+import { JIRA_PROJECT_ID } from "../shared/domain.mjs";
 import { createTaskboardServer } from "../server/index.mjs";
 
 const runningApps = [];
@@ -1234,6 +1235,270 @@ test("project and task CRUD flow", async () => {
   const projectsAfterRestore = await request(baseUrl, "/api/projects");
   const restoredWebsiteProject = projectsAfterRestore.body.projects.find((project) => project.id === "website");
   assert.equal(restoredWebsiteProject.issueCount, 1);
+});
+
+test("tasks can be created with a delegated agent or squad", async () => {
+  const baseUrl = await startServer();
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+  });
+  const squad = await request(baseUrl, "/api/squads", {
+    method: "POST",
+    body: {
+      name: "Delivery Squad",
+      leaderAgentId: "builder",
+      memberAgentIds: [],
+      skillTags: ["delivery"],
+    },
+  });
+  assert.equal(squad.response.status, 201);
+  const squadId = squad.body.squad.id;
+
+  const agentTask = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Delegated to an agent", assignedAgentId: "builder" },
+  });
+  assert.equal(agentTask.response.status, 201);
+  assert.equal(agentTask.body.task.assignedAgentId, "builder");
+  assert.equal(agentTask.body.task.squadId, null);
+  // The assignee (负责人) falls back to the current user when delegating.
+  assert.equal(agentTask.body.task.assignee.id, "local-user");
+  assert.equal(agentTask.body.task.assignee.name, "本地用户");
+
+  const squadTask = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Delegated to a squad", squadId },
+  });
+  assert.equal(squadTask.response.status, 201);
+  assert.equal(squadTask.body.task.squadId, squadId);
+  assert.equal(squadTask.body.task.assignedAgentId, null);
+
+  // Backward compatibility: no delegation fields keeps the default behavior.
+  const plainTask = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Plain task" },
+  });
+  assert.equal(plainTask.response.status, 201);
+  assert.equal(plainTask.body.task.assignedAgentId, null);
+  assert.equal(plainTask.body.task.squadId, null);
+  assert.equal(plainTask.body.task.assignee.id, "local-user");
+});
+
+test("task delegation fields are mutually exclusive and reject empty strings", async () => {
+  const baseUrl = await startServer();
+
+  const targetAgent = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: {
+      projectId: "local",
+      title: "Target plus agent",
+      assigneeTarget: "current-user",
+      assignedAgentId: "builder",
+    },
+  });
+  assert.equal(targetAgent.response.status, 400);
+  assert.equal(targetAgent.body.error.code, "ASSIGNEE_CONFLICT");
+
+  const targetSquad = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: {
+      projectId: "local",
+      title: "Target plus squad",
+      assigneeTarget: "codex-agent",
+      squadId: "squad-1",
+    },
+  });
+  assert.equal(targetSquad.response.status, 400);
+  assert.equal(targetSquad.body.error.code, "ASSIGNEE_CONFLICT");
+
+  const agentSquad = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Agent plus squad", assignedAgentId: "builder", squadId: "squad-1" },
+  });
+  assert.equal(agentSquad.response.status, 400);
+  assert.equal(agentSquad.body.error.code, "ASSIGNEE_CONFLICT");
+
+  const emptyAgent = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Empty agent", assignedAgentId: "" },
+  });
+  assert.equal(emptyAgent.response.status, 400);
+  assert.equal(emptyAgent.body.error.code, "INVALID_FIELD");
+
+  const emptySquad = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Empty squad", squadId: "" },
+  });
+  assert.equal(emptySquad.response.status, 400);
+  assert.equal(emptySquad.body.error.code, "INVALID_FIELD");
+
+  // PATCH carries the same exclusivity contract.
+  const created = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Patch conflict" },
+  });
+  const task = created.body.task;
+  const patchConflict = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: task.version, assigneeTarget: "current-user", squadId: "squad-1" },
+  });
+  assert.equal(patchConflict.response.status, 400);
+  assert.equal(patchConflict.body.error.code, "ASSIGNEE_CONFLICT");
+});
+
+test("task delegation references must exist or return 404", async () => {
+  const baseUrl = await startServer();
+
+  const missingAgent = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Missing agent", assignedAgentId: "ghost" },
+  });
+  assert.equal(missingAgent.response.status, 404);
+  assert.equal(missingAgent.body.error.code, "AGENT_NOT_FOUND");
+
+  const missingSquad = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Missing squad", squadId: "ghost-squad" },
+  });
+  assert.equal(missingSquad.response.status, 404);
+  assert.equal(missingSquad.body.error.code, "SQUAD_NOT_FOUND");
+
+  const created = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Patch missing agent" },
+  });
+  const task = created.body.task;
+  const patchMissing = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: task.version, assignedAgentId: "ghost" },
+  });
+  assert.equal(patchMissing.response.status, 404);
+  assert.equal(patchMissing.body.error.code, "AGENT_NOT_FOUND");
+});
+
+test("patching a task updates delegation without clearing unrelated fields", async () => {
+  const baseUrl = await startServer();
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: [], workspacePath: null },
+  });
+  const squad = await request(baseUrl, "/api/squads", {
+    method: "POST",
+    body: { name: "Delivery Squad", leaderAgentId: "builder", memberAgentIds: [], skillTags: [] },
+  });
+  assert.equal(squad.response.status, 201);
+  const squadId = squad.body.squad.id;
+
+  const created = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: { projectId: "local", title: "Delegated task", assignedAgentId: "builder" },
+  });
+  assert.equal(created.response.status, 201);
+  const task = created.body.task;
+  assert.equal(task.assignedAgentId, "builder");
+
+  // Editing a non-delegation field preserves the delegation.
+  const titlePatch = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: task.version, title: "Renamed delegated task" },
+  });
+  assert.equal(titlePatch.response.status, 200);
+  assert.equal(titlePatch.body.task.title, "Renamed delegated task");
+  assert.equal(titlePatch.body.task.assignedAgentId, "builder");
+
+  // Switching from agent to squad is one-or-the-other.
+  const toSquad = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: titlePatch.body.task.version, squadId },
+  });
+  assert.equal(toSquad.response.status, 200);
+  assert.equal(toSquad.body.task.squadId, squadId);
+  assert.equal(toSquad.body.task.assignedAgentId, null);
+
+  // A patch carrying only a delegation field is not treated as empty.
+  const onlyDelegation = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: toSquad.body.task.version, assignedAgentId: "builder" },
+  });
+  assert.equal(onlyDelegation.response.status, 200);
+  assert.equal(onlyDelegation.body.task.assignedAgentId, "builder");
+  assert.equal(onlyDelegation.body.task.squadId, null);
+
+  // Switching back to current-user revokes the delegation.
+  const backToUser = await request(baseUrl, `/api/tasks/${task.id}`, {
+    method: "PATCH",
+    body: { version: onlyDelegation.body.task.version, assigneeTarget: "current-user" },
+  });
+  assert.equal(backToUser.response.status, 200);
+  assert.equal(backToUser.body.task.assignee.id, "local-user");
+  assert.equal(backToUser.body.task.assignedAgentId, null);
+  assert.equal(backToUser.body.task.squadId, null);
+});
+
+test("task delegation fields are rejected on Jira-synced tasks", async () => {
+  const manifestId = "codex-taskboard-test-jira";
+  const originId = createHash("sha256").update(manifestId).digest("hex");
+  const baseUrl = await startServer((directory) => ({
+    jiraConfigStore: {
+      async read() {
+        return {
+          version: 2,
+          baseUrl: "https://jira.example.test",
+          username: "tester",
+          password: "secret",
+          originId,
+          displayName: "Test User",
+          projects: [],
+        };
+      },
+      async save() { return null; },
+      async clear() {},
+      validate() { return {}; },
+    },
+    jiraFetch: async (url, init = {}) => {
+      const pathname = new URL(url).pathname;
+      if (pathname === "/rest/applinks/1.0/manifest") {
+        return new Response(JSON.stringify({ id: manifestId }));
+      }
+      if (pathname === "/rest/api/2/search") {
+        return new Response(JSON.stringify({
+          issues: [{
+            id: "10001",
+            key: "PROJ-1",
+            fields: {
+              summary: "Synced Jira task",
+              description: "From Jira",
+              status: { name: "To Do", statusCategory: { key: "new" } },
+              priority: { name: "Medium" },
+              labels: [],
+              duedate: null,
+              assignee: { key: "tester", displayName: "Test User" },
+              reporter: { key: "tester", displayName: "Test User" },
+              created: "2026-01-01T00:00:00.000Z",
+              updated: "2026-01-01T00:00:00.000Z",
+            },
+          }],
+          total: 1,
+          startAt: 0,
+          maxResults: 100,
+        }));
+      }
+      throw new Error(`Unexpected Jira fetch: ${url}`);
+    },
+  }));
+
+  const list = await request(baseUrl, `/api/tasks?projectId=${JIRA_PROJECT_ID}`);
+  assert.equal(list.response.status, 200);
+  const jiraTask = list.body.tasks.find((task) => task.source === "jira");
+  assert.ok(jiraTask, "expected a Jira-synced task");
+
+  const patch = await request(baseUrl, `/api/tasks/${jiraTask.id}`, {
+    method: "PATCH",
+    body: { version: jiraTask.version, assignedAgentId: "builder" },
+  });
+  assert.equal(patch.response.status, 409);
+  assert.equal(patch.body.error.code, "JIRA_ASSIGNEE_UNAVAILABLE");
 });
 
 test("moving a task updates its status and sort order", async () => {
