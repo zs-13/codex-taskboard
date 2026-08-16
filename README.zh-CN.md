@@ -62,6 +62,18 @@ npm run codex
 
 > **Windows 一键设置（可选）：** 克隆后运行 `scripts\setup-taskboard-autostart.ps1`，会创建「Codex Taskboard」桌面快捷方式并注册常驻注入器的开机自启。之后双击该快捷方式即可打开面板，无需终端。可规避的坑见[让侧边栏面板一直可用](#让侧边栏面板一直可用避开这些坑)。
 
+### 启动与关闭（速查）
+
+| 操作 | 命令 |
+| --- | --- |
+| **启动**（Windows） | `scripts\start-taskboard.bat` |
+| **启动**（macOS） | `./scripts/start-taskboard.sh` — 或 `npm run codex` |
+| **一键彻底停止**（Windows） | `scripts\stop-taskboard.bat` |
+| **停止**（macOS） | 在启动器终端按 `Ctrl-C` |
+| **强制重启**（Windows） | `scripts\start-taskboard.bat -Force` |
+
+单独关闭 Codex 窗口**不会**停止 Taskboard——本地服务与 agent runner 会在后台继续运行，这是有意设计，关掉窗口期间任务进度和历史仍实时同步。要彻底停止时，运行停止脚本（Windows）或在启动器终端按 `Ctrl-C`（macOS）。在 Windows 上，关窗后可能残留 `ChatGPT.exe` 占用 CDP 端口，`-Force` 会先清理残留进程再重新拉起。相关坑位见[让侧边栏面板一直可用（避开这些坑）](#让侧边栏面板一直可用避开这些坑)；想自建 Windows 启动器见 [docs/windows-launcher-setup.md](docs/windows-launcher-setup.md)。
+
 ## 如何打开任务面板（Windows / macOS）
 
 任务面板存在于**由启动器拉起的那个 Codex 窗口的右侧侧边栏**里——它是通过 CDP 注入的，从应用图标 / 开始菜单直接打开的 Codex 窗口不会显示面板。想看面板，请始终通过下面的启动器打开 Codex。
@@ -99,6 +111,8 @@ npm run codex
 - 数据保存在本地（默认 `.data/taskboard.sqlite`），关掉 Codex 也不会丢。重启后，用同一条启动命令重新打开 Codex，面板就会回来。
 
 **关掉 Codex 后再打开（Windows）**
+
+> 速查命令见上文的[启动与关闭（速查）](#启动与关闭速查)。
 
 关闭 Codex 窗口时，窗口会消失，但 **ChatGPT.exe 进程可能残留**，CDP 端口仍被占用。此时直接再跑启动器会提示「Codex CDP 已可达」而跳过启动，窗口开不出来。请用下面任一方式：
 

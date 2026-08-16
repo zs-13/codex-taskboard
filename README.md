@@ -67,6 +67,28 @@ npm run codex
 > [Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls)
 > for the pitfalls this avoids.
 
+### Start and stop at a glance
+
+| Action | Command |
+| --- | --- |
+| **Start** (Windows) | `scripts\start-taskboard.bat` |
+| **Start** (macOS) | `./scripts/start-taskboard.sh` — or `npm run codex` |
+| **Stop everything** (Windows) | `scripts\stop-taskboard.bat` |
+| **Stop** (macOS) | press `Ctrl-C` in the launcher terminal |
+| **Force restart** (Windows) | `scripts\start-taskboard.bat -Force` |
+
+Closing the Codex window alone does **not** stop the Taskboard — the local
+service and agent runner keep running in the background on purpose, so task
+progress and history keep syncing even while the window is closed. When you
+want everything stopped, run the stop script (Windows) or press `Ctrl-C` in
+the launcher terminal (macOS). On Windows, a closed window can leave
+`ChatGPT.exe` holding the CDP port; `-Force` cleans up any residual processes
+first, then starts everything again. See
+[Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls)
+for the pitfalls this avoids, and
+[docs/windows-launcher-setup.md](docs/windows-launcher-setup.md) if you want to
+build your own Windows launcher.
+
 ## How to open the Taskboard panel (Windows / macOS)
 
 The Taskboard panel lives in the **right sidebar of a Codex window the launcher started** — it is injected over CDP, so a Codex window opened from the app icon / Start menu will not show it. To see the panel, always open Codex through the launcher below.
@@ -104,6 +126,8 @@ The Taskboard panel lives in the **right sidebar of a Codex window the launcher 
 - Data is stored locally (`.data/taskboard.sqlite` by default) and survives closing Codex. After a restart, reopen Codex through the same launcher command to bring the panel back.
 
 **Closing and reopening Codex (Windows)**
+
+> Quick commands: see [Start and stop at a glance](#start-and-stop-at-a-glance) above.
 
 Closing the Codex window can leave `ChatGPT.exe` processes behind with the CDP
 port still bound. If you then re-run the launcher it reports "Codex CDP already
