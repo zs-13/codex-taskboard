@@ -98,6 +98,15 @@ npm run codex
 - 智能体（通过自带的 `manage-taskboard` skill / `taskctl` CLI）会认领并执行议题，进度和评论实时同步。
 - 数据保存在本地（默认 `.data/taskboard.sqlite`），关掉 Codex 也不会丢。重启后，用同一条启动命令重新打开 Codex，面板就会回来。
 
+**关掉 Codex 后再打开（Windows）**
+
+关闭 Codex 窗口时，窗口会消失，但 **ChatGPT.exe 进程可能残留**，CDP 端口仍被占用。此时直接再跑启动器会提示「Codex CDP 已可达」而跳过启动，窗口开不出来。请用下面任一方式：
+
+- **一键彻底停止**：运行 `scripts\stop-taskboard.bat`，会清掉本启动器拉起的 ChatGPT.exe 和后台 node 进程（服务 / 注入器 / agent runner）。之后再跑 `scripts\start-taskboard.bat` 就能重新打开窗口。
+- **强制重启**：直接运行 `scripts\start-taskboard.bat -Force`，会先清理残留的 Codex（及后台进程）再重新拉起。
+
+启动器本身也会自动处理残留：CDP 端口可达但对应 Codex 主进程已不在（或窗口已关但进程仍在）时，会先清理再重新拉起，保证新窗口一定能打开。stop 脚本只清理本启动器 profile 的 Codex，不会误杀你用应用图标/开始菜单自己开的 Codex。
+
 如果面板没有出现，最常见的原因是用应用图标开的 Codex 而不是启动器——见[让侧边栏面板一直可用（避开这些坑）](#让侧边栏面板一直可用避开这些坑)。
 
 ## 安装为原生 Codex 插件
@@ -292,11 +301,11 @@ npm run codex:inject -- --port 9229 --open
 
 1. **用启动器打开 Codex，不要用应用图标。** 从开始菜单/图标正常打开的 Codex 窗口不会启用 CDP，注入器挂不上去，面板不会出现。请始终用 `scripts\start-taskboard.bat`（Windows）或 `./scripts/start-taskboard.sh` / `npm run codex`（macOS）打开带面板的 Codex 窗口。
 
-2. **关闭再打开 Codex 会清掉面板。** 面板活在 Codex 窗口内部，重启窗口就会消失。常驻注入器会在同一端口上检测到带调试端口的 Codex 重新出现时自动重新注入——只要用启动器重新打开 Codex，面板就会自己回来。
+2. **关闭再打开 Codex 会清掉面板。** 面板活在 Codex 窗口内部，重启窗口就会消失。常驻注入器会在同一端口上检测到带调试端口的 Codex 重新出现时自动重新注入——只要用启动器重新打开 Codex，面板就会自己回来。如果关掉窗口后残留进程占着端口、导致重新打开失败，先运行 `scripts\stop-taskboard.bat` 再启动，或直接用 `scripts\start-taskboard.bat -Force`。
 
 3. **只跑一个 Taskboard。** 不要每次换一个 CDP 端口启动。每换一个端口/配置，就会多出一个 Codex 窗口、一个注入器、一个服务，且各自使用独立的 `.data\taskboard.sqlite`，历史任务在不同实例之间会「看起来丢失」。请固定使用一个端口（Windows `9232`、macOS `9231`）。启动器是幂等的——重复运行只会复用已在运行的服务、注入器和 Codex，不会重复拉起。
 
-4. **服务有意比 Codex 活得更久。** 关掉 Codex 后服务和 agent runner 仍在后台运行，这正是实时任务进度和历史记录能持续的原因。关闭 Codex 不会删除任务。要彻底停止，请结束服务/注入器/agent runner 进程，或禁用开机自启。
+4. **服务有意比 Codex 活得更久。** 关掉 Codex 后服务和 agent runner 仍在后台运行，这正是实时任务进度和历史记录能持续的原因。关闭 Codex 不会删除任务。要彻底停止，运行 `scripts\stop-taskboard.bat`（Windows）——它会清掉本启动器拉起的 ChatGPT.exe 和后台 node 进程（服务 / 注入器 / agent runner）；或禁用开机自启。
 
 5. **Windows 一键设置（可选）。** 运行 `scripts\setup-taskboard-autostart.ps1` 会创建「Codex Taskboard」桌面快捷方式（固定端口启动器）并注册常驻注入器的开机自启，安装后双击即可打开面板，重启电脑也能自动就绪。
 
