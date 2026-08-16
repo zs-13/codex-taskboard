@@ -2145,6 +2145,14 @@ export function createTaskboardServer(options = {}) {
             proof: createHmac("sha256", resolved.instanceSecret)
               .update(challenge)
               .digest("hex"),
+            // Advertise the instance's own base URL so a second launcher (for
+            // example the Codex plugin's copy) can detect and reuse this
+            // already-running instance instead of starting a conflicting
+            // service with a fresh random token. Only exposed on loopback so
+            // the instance token is never leaked to the network.
+            ...(isLoopbackAddress(request.socket.remoteAddress)
+              ? { baseUrl: `http://127.0.0.1:${boundPort ?? resolvePort()}/${encodeURIComponent(resolved.instanceToken)}` }
+              : {}),
           });
         }
         return sendJson(response, 200, { status: "ok" });
@@ -3474,6 +3482,7 @@ export function createTaskboardServer(options = {}) {
   });
 
   let listening = false;
+  let boundPort = null;
   return {
     database,
     aiChat,
@@ -3500,8 +3509,10 @@ export function createTaskboardServer(options = {}) {
         if (fd === null) server.listen(port, host);
         else server.listen({ fd });
       });
+      const address = server.address();
+      boundPort = address?.port ?? port;
       listening = true;
-      return server.address();
+      return address;
     },
     async close() {
       const serverClosed = listening

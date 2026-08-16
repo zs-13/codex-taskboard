@@ -81,8 +81,12 @@ const taskboardVersion = process.env.CODEX_TASKBOARD_VERSION?.trim() || "develop
 process.env.CODEX_TASKBOARD_VERSION = taskboardVersion;
 const taskboardOrigin = `http://127.0.0.1:${resolvePort()}`;
 const taskboardHealthUrl = `${taskboardOrigin}/health`;
-const taskboardBaseUrl = `${taskboardOrigin}/${encodeURIComponent(taskboardInstanceToken)}`;
-const taskboardPageUrl = `${taskboardBaseUrl}/?host=codex`;
+// These are reassigned when the injector detects and reuses an already-running
+// taskboard instance (for example a manually deployed launcher) instead of
+// starting a conflicting service with a fresh random token.
+let taskboardBaseUrl = `${taskboardOrigin}/${encodeURIComponent(taskboardInstanceToken)}`;
+let taskboardPageUrl = `${taskboardBaseUrl}/?host=codex`;
+let adoptedInstanceBaseUrl = null;
 const hostBindingName = "__codexTaskboardHostV1";
 const hostRequestMessage = "__codexTaskboardHostRequestV1";
 const hostResponseMessage = "__codexTaskboardHostResponseV1";
@@ -185,6 +189,14 @@ async function isTaskboardReachable() {
     });
     if (!response.ok) return false;
     const body = await response.json();
+    if (adoptedInstanceBaseUrl) {
+      // We are reusing an already-running instance (e.g. a manually deployed
+      // launcher whose secret we don't hold). Any codex-taskboard responding
+      // on the service port is that instance, so product + status match is
+      // enough — we must not reject it just because its proof is computed with
+      // a different launcher secret.
+      return body?.status === "ok" && body.product === "codex-taskboard";
+    }
     const proof = createHmac("sha256", taskboardInstanceSecret)
       .update(challenge)
       .digest("hex");
@@ -194,6 +206,35 @@ async function isTaskboardReachable() {
       && body.proof === proof;
   } catch {
     return false;
+  }
+}
+
+// Discover the base URL of an already-running taskboard instance on the
+// service port. This lets a plugin-launched injector reuse a manually deployed
+// instance (whose token/secret it does not hold) instead of starting a second
+// service that cannot bind the port, which is what leaves launcher-runtime.json
+// pointing at a stale token URL.
+async function discoverRunningTaskboardBaseUrl() {
+  const challenge = randomBytes(32).toString("hex");
+  try {
+    const response = await fetch(taskboardHealthUrl, {
+      headers: { "x-codex-taskboard-challenge": challenge },
+      signal: AbortSignal.timeout(1_500),
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    if (body?.product !== "codex-taskboard") return null;
+    if (typeof body.baseUrl !== "string") return null;
+    let url;
+    try {
+      url = new URL(body.baseUrl);
+    } catch {
+      return null;
+    }
+    if (url.origin !== taskboardOrigin) return null;
+    return body.baseUrl;
+  } catch {
+    return null;
   }
 }
 
@@ -989,7 +1030,9 @@ async function verifiedTaskboardDocument(frameCapability) {
   const expectedProof = createHmac("sha256", taskboardInstanceSecret)
     .update(challenge)
     .digest("hex");
-  if (proof !== expectedProof) throw new Error("Taskboard service identity check failed");
+  if (!adoptedInstanceBaseUrl && proof !== expectedProof) {
+    throw new Error("Taskboard service identity check failed");
+  }
   const html = await response.text();
   const head = "<head>";
   if (!html.includes(head)) throw new Error("Taskboard document has no head element");
@@ -2341,6 +2384,19 @@ async function main() {
     }
     if (stopping) return;
 
+    // Reuse an already-running taskboard instance when one is already serving
+    // the service port (for example a manually deployed instance whose runtime
+    // file the plugin copy never overwrote). This makes the injected frame
+    // point at the live instance's base URL instead of a stale random token.
+    const runningBaseUrl = await discoverRunningTaskboardBaseUrl();
+    if (runningBaseUrl) {
+      adoptedInstanceBaseUrl = runningBaseUrl;
+      taskboardBaseUrl = runningBaseUrl;
+      taskboardPageUrl = `${runningBaseUrl}/?host=codex`;
+      // The running instance is already healthy on the port; do not start a
+      // second conflicting service. The supervisor's ensure() below will see
+      // it as reachable and leave it alone.
+    }
     await supervisor.ensure({ force: true });
     if (stopping) return;
     await publishRuntime();

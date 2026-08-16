@@ -34,6 +34,18 @@ test("the Windows launcher can force-restart and cleans up orphaned Codex residu
   assert.match(startSource, /already in use by an unknown process/);
 });
 
+test("the Windows launcher reuses an already-running taskboard instance instead of starting a stale one", () => {
+  assert.match(startSource, /function Get-RunningTaskboardBaseUrl/);
+  assert.match(startSource, /x-codex-taskboard-challenge/);
+  assert.match(startSource, /Invoke-WebRequest.*127\.0\.0\.1:47823\/health/);
+  assert.match(startSource, /Taskboard instance already running at \$runningBaseUrl - reusing it/);
+  assert.match(startSource, /Set-Content -Path \$runtimeFile/);
+  assert.match(startSource, /launcher-runtime\.json/);
+  assert.match(startSource, /if \(\$runningBaseUrl\) \{ \$runtimeReady = \$true \}/);
+  // The injector performs the same discovery so both launch paths stay in sync.
+  assert.match(startSource, /Get-RunningTaskboardBaseUrl/);
+});
+
 test("the stop script kills managed Codex and the background node processes", () => {
   assert.match(stopSource, /\[switch\]\$KeepCodex/);
   assert.match(stopSource, /\[switch\]\$KeepNode/);

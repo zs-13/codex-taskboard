@@ -59,6 +59,28 @@ function Has-NodeProcess($matchText, $portFilter = "") {
   return $false
 }
 
+# Discover the base URL of an already-running taskboard instance on the service
+# port. This lets a plugin-launched launcher reuse a manually deployed instance
+# (whose token/secret it does not hold) instead of starting a second service
+# that cannot bind the port, which is what leaves launcher-runtime.json pointing
+# at a stale token URL.
+function Get-RunningTaskboardBaseUrl {
+  $challenge = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Minimum 0 -Maximum 256) })
+  try {
+    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:47823/health" -Headers @{
+      "x-codex-taskboard-challenge" = $challenge
+    } -TimeoutSec 2
+    $body = $response.Content | ConvertFrom-Json
+    if ($body.product -ne "codex-taskboard") { return $null }
+    if (-not $body.baseUrl) { return $null }
+    $baseUrl = [string]$body.baseUrl
+    if (-not $baseUrl.StartsWith("http://127.0.0.1:47823")) { return $null }
+    return $baseUrl
+  } catch {
+    return $null
+  }
+}
+
 Write-Host "=== Codex Taskboard (Windows launcher) ==="
 Write-Host "Repo: $repoRoot"
 
@@ -154,6 +176,21 @@ if (-not $cdpOk) {
 
 # 5. Run the injector (watch + open). Its supervisor starts the Taskboard
 #    service and writes .data/launcher-runtime.json.
+#
+#    First check whether a taskboard instance is already serving the service
+#    port (e.g. a manually deployed instance). If so, reuse it: write a valid
+#    runtime file pointing at the live instance's URL and skip starting a second
+#    conflicting service. This keeps the embedded panel pointing at a live URL
+#    even when the plugin's own earlier instance exited and left a stale
+#    launcher-runtime.json behind.
+$runningBaseUrl = Get-RunningTaskboardBaseUrl
+if ($runningBaseUrl) {
+  Write-Host "Taskboard instance already running at $runningBaseUrl - reusing it."
+  $runtimeJson = @{ version = 1; pid = $PID; url = $runningBaseUrl } | ConvertTo-Json -Compress
+  Set-Content -Path $runtimeFile -Value $runtimeJson -Encoding UTF8
+  $runtimeReady = $true
+}
+
 $otherInjectorPort = $null
 $injectorProcesses = Get-CimInstance Win32_Process -Filter "name = 'node.exe'" -ErrorAction SilentlyContinue
 foreach ($injectorProcess in $injectorProcesses) {
@@ -182,8 +219,9 @@ if (-not (Has-NodeProcess "scripts\codex-injector.mjs" $Port)) {
 
 # 6. Wait for the runtime file (the service URL) so the agent runner can attach.
 $runtimeReady = $false
+if ($runningBaseUrl) { $runtimeReady = $true }
 $deadline = (Get-Date).AddSeconds(30)
-while ((Get-Date) -lt $deadline) {
+while (-not $runtimeReady -and (Get-Date) -lt $deadline) {
   if (Test-Path $runtimeFile) { $runtimeReady = $true; break }
   Start-Sleep -Milliseconds 500
 }
