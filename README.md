@@ -4,6 +4,8 @@
 
 A local-first issue board that runs in a browser and can be embedded in Codex through the standalone CDP launcher or its injection script. The same HTTP API powers the React UI and the `taskctl` CLI used by the bundled Codex Skill.
 
+> **New to Taskboard?** Start here: [Beginner's guide (简体中文)](docs/beginners-guide.md) — step-by-step install, start, and first tasks.
+
 ![Codex window with the Taskboard panel embedded (real capture, panel open)](docs/assets/codex-sidebar-embedded.png)
 
 ## Screenshots
