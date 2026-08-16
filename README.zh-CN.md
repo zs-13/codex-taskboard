@@ -4,6 +4,8 @@
 
 一个本地优先的议题面板，可在浏览器中运行，也可通过独立 CDP 启动器或其注入脚本嵌入 Codex。同一套 HTTP API 为 React UI 和随附 Codex Skill 使用的 `taskctl` CLI 提供支持。
 
+> **新手教程：** [小白从这里开始](docs/beginners-guide.md) —— 手把手带你安装、启动、建任务。
+
 ![Codex 窗口内嵌任务面板（真实截图，面板已打开）](docs/assets/codex-sidebar-embedded.png)
 
 ## 功能截图
