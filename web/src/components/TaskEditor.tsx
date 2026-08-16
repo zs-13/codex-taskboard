@@ -213,6 +213,7 @@ export function TaskEditor({
   const [startDate] = useState(task?.startDate ?? initialDraft?.startDate ?? "");
   const [dueDate, setDueDate] = useState(task?.dueDate ?? initialDraft?.dueDate ?? "");
   const [recurrence, setRecurrence] = useState<Recurrence | null>(task?.recurrence ?? initialDraft?.recurrence ?? null);
+  const [autoExecute, setAutoExecute] = useState<boolean>(task?.autoExecute ?? true);
   const [parentId, setParentId] = useState<string | null>(initialDraft?.relations.parentId ?? null);
   const [relatedIds, setRelatedIds] = useState<string[]>(initialDraft?.relations.relatedIds ?? []);
   const [subIssueIds, setSubIssueIds] = useState<string[]>(initialDraft?.relations.subIssueIds ?? []);
@@ -527,6 +528,7 @@ export function TaskEditor({
         ...(assigneeTarget ? { assigneeTarget } : {}),
         ...(assignedAgentId ? { assignedAgentId } : {}),
         ...(squadId ? { squadId } : {}),
+        autoExecute,
         developmentContext,
         startDate: startDate || null,
         dueDate: dueDate || null,
@@ -937,6 +939,22 @@ export function TaskEditor({
                   </button>
                 </div>
               )}
+              <div className="create-more-control" title={text(
+                "认领后自动开始执行；关闭后需手动在对话中打开。",
+                "Auto-start execution after claim; turn off to open in conversation manually.",
+              )}>
+                <span>{text("自动执行", "Auto-execute")}</span>
+                <button
+                  type="button"
+                  className={`board-setting-switch${autoExecute ? " is-on" : ""}`}
+                  role="switch"
+                  aria-checked={autoExecute}
+                  disabled={saving}
+                  onClick={() => setAutoExecute((current) => !current)}
+                >
+                  <span aria-hidden="true" />
+                </button>
+              </div>
               <button
                 className="button primary"
                 type="submit"

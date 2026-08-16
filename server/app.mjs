@@ -467,6 +467,14 @@ function parsePriority(value, fallback) {
   return result;
 }
 
+function parseNullableBoolean(value, name) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "boolean") {
+    throw new ApiError(400, "INVALID_FIELD", `'${name}' must be a boolean or null`);
+  }
+  return value;
+}
+
 function slugify(value) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 64);
 }
@@ -657,7 +665,7 @@ function parseTaskCreate(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "projectId", "title", "description", "status", "priority", "labels", "sortOrder", "threadId", "threadBinding",
-    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence", "autoExecute",
   ]));
   const assigneeTarget = parseAssigneeTarget(body.assigneeTarget);
   const assignedAgentId = parseDelegationId(body.assignedAgentId, "assignedAgentId");
@@ -682,6 +690,7 @@ function parseTaskCreate(body) {
     startDate: parseDueDate(body.startDate ?? null, "startDate"),
     dueDate: parseDueDate(body.dueDate ?? null),
     recurrence: parseRecurrence(body.recurrence ?? null),
+    autoExecute: parseNullableBoolean(body.autoExecute, "autoExecute"),
   };
   if (task.recurrence && !task.dueDate) {
     throw new ApiError(400, "INVALID_FIELD", "A recurring issue requires 'dueDate'");
@@ -693,7 +702,7 @@ function parseTaskPatch(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "version", "projectId", "title", "description", "status", "priority", "labels", "threadId", "threadBinding",
-    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence", "autoExecute",
   ]));
   const version = parseVersion(body.version);
   const threadId = parseThreadId(body.threadId);
@@ -703,6 +712,7 @@ function parseTaskPatch(body) {
   const squadId = parseDelegationId(body.squadId, "squadId");
   assertAssigneeExclusive(assigneeTarget, assignedAgentId, squadId);
   const changes = {};
+  if (body.autoExecute !== undefined) changes.autoExecute = parseNullableBoolean(body.autoExecute, "autoExecute");
   if (body.projectId !== undefined) changes.projectId = validateProjectId(body.projectId);
   if (body.title !== undefined) changes.title = stringField(body.title, "title", { required: true, maxLength: 240 });
   if (body.description !== undefined) changes.description = stringField(body.description, "description", { maxLength: 100_000 });
@@ -1901,6 +1911,37 @@ export function createTaskboardServer(options = {}) {
   const codexSessionStateCache = new Map();
   const codexSessionsDirectory = path.join(path.dirname(resolved.codexStatePath), "sessions");
 
+  function autoExecuteEnabledForTask(task) {
+    if (typeof task?.autoExecute === "boolean") return task.autoExecute;
+    return String(process.env.CODEX_TASKBOARD_AUTO_EXECUTE ?? "1") !== "0";
+  }
+
+  async function autoExecuteTask(task) {
+    if (!task || task.archivedAt != null) {
+      return { started: false, reason: "not-found" };
+    }
+    if (!["todo", "in_progress"].includes(task.status) || !task.assignedAgentId) {
+      return { started: false, reason: "not-claimed-or-assigned" };
+    }
+    if (!autoExecuteEnabledForTask(task)) {
+      return { started: false, reason: "auto-execute-disabled" };
+    }
+    const existingThreads = database.listAiChatThreadsForIssue(task.id);
+    const activeThread = existingThreads.find((candidate) => candidate.currentRun);
+    if (activeThread) {
+      return { started: false, reason: "already-running", thread: activeThread };
+    }
+    const thread = existingThreads[0] ?? await aiChat.createThread({
+      projectId: task.projectId,
+      issueId: task.id,
+      title: task.title,
+    });
+    const run = await aiChat.startTurn(thread.id, {
+      message: `e-taskboard 处理任务面板任务 ${task.identifier}，并同步进度状态。`,
+    });
+    return { started: true, thread, run };
+  }
+
   async function findCodexSession(threadId) {
     const cached = codexSessionSearches.get(threadId);
     if (cached && (cached.path || Date.now() - cached.checkedAt < 5_000)) return cached.path;
@@ -2828,7 +2869,7 @@ export function createTaskboardServer(options = {}) {
       }
 
       const extendedTaskRoute = pathname.match(
-        /^\/api\/tasks\/([^/]+)\/(assign|block|control|lock|claim|dependencies|autonomous-step)$/,
+        /^\/api\/tasks\/([^/]+)\/(assign|block|control|lock|claim|dependencies|autonomous-step|execute)$/,
       );
       if (extendedTaskRoute) {
         const taskId = decodeRouteSegment(extendedTaskRoute[1], "Task id");
@@ -2840,6 +2881,9 @@ export function createTaskboardServer(options = {}) {
           const input = parseTaskAssign(await readJson(request));
           task = database.assignTask(taskId, input.version, input, actor);
           events.emit("task.assigned", { task });
+          if (task.assignedAgentId && autoExecuteEnabledForTask(task)) {
+            void autoExecuteTask(task).catch(() => {});
+          }
           return sendJson(response, 200, { task });
         }
         if (action === "block") {
@@ -2862,7 +2906,14 @@ export function createTaskboardServer(options = {}) {
         if (action === "claim") {
           task = database.claimTaskForAgent(taskId, parseTaskClaim(await readJson(request)), actor);
           events.emit("task.claimed", { task });
+          if (autoExecuteEnabledForTask(task)) {
+            void autoExecuteTask(task).catch(() => {});
+          }
           return sendJson(response, 200, { task });
+        }
+        if (action === "execute") {
+          const result = await autoExecuteTask(database.getTask(taskId));
+          return sendJson(response, 200, result);
         }
         if (action === "dependencies") {
           const input = parseTaskDependency(await readJson(request));

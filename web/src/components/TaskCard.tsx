@@ -6,8 +6,10 @@ import {
   type AssigneeTarget,
   type Task,
   type TaskDraft,
+  type TaskExecutionState,
   type TaskPriority,
 } from "../types";
+import type { LinearIconName } from "./LinearIcon";
 import { labelPresentation } from "../labels";
 import { taskPriorityLabel, useTaskboardI18n } from "../i18n";
 import { CODEX_AGENT_ACTOR, actorKey, assigneeTargetForActor } from "../actors";
@@ -50,6 +52,31 @@ interface TaskCardProps {
 function calendarDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { month: "numeric", day: "numeric" })
     .format(new Date(`${value}T12:00:00`));
+}
+
+function executionStateIcon(state: TaskExecutionState): LinearIconName {
+  switch (state) {
+    case "claimed": return "statusStarted";
+    case "running": return "play";
+    case "completed": return "check";
+    case "failed": return "alert";
+    case "interrupted": return "pause";
+    default: return "statusTodo";
+  }
+}
+
+function executionStateLabel(
+  state: TaskExecutionState,
+  text: (chinese: string, english: string) => string,
+) {
+  switch (state) {
+    case "claimed": return text("已认领未执行", "Claimed");
+    case "running": return text("执行中", "Running");
+    case "completed": return text("已完成", "Completed");
+    case "failed": return text("执行失败", "Failed");
+    case "interrupted": return text("已中断", "Interrupted");
+    default: return text("待执行", "Idle");
+  }
 }
 
 function createdDate(value: string, locale: string, text: (chinese: string, english: string) => string) {
@@ -475,7 +502,7 @@ export function TaskCard({
 
       <h3 id={`task-${task.id}-title`}>{task.title}</h3>
 
-      {(task.blocked || task.squadId || task.assignedAgentId || (task.controlStatus ?? "active") !== "active" || task.lockOwner) && (
+      {(task.blocked || task.squadId || task.assignedAgentId || (task.controlStatus ?? "active") !== "active" || task.lockOwner || (task.executionState && task.executionState !== "idle")) && (
         <div className="task-card-badges" aria-label={text("任务执行状态", "Execution state")}>
           {task.blocked && (
             <span className="task-exec-badge is-blocked" title={task.blockedReason ?? text("任务已阻塞", "Task is blocked")}>
@@ -505,6 +532,12 @@ export function TaskCard({
             <span className="task-exec-badge">
               <LinearIcon name="shieldAlert" />
               <span>{task.lockOwner}</span>
+            </span>
+          )}
+          {task.executionState && task.executionState !== "idle" && (
+            <span className={`task-exec-badge is-execution-${task.executionState}`}>
+              <LinearIcon name={executionStateIcon(task.executionState)} />
+              <span>{executionStateLabel(task.executionState, text)}</span>
             </span>
           )}
         </div>

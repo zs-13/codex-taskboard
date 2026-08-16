@@ -70,6 +70,31 @@ test("agent runner automatically claims a matching todo task", async () => {
   assert.ok(comments.body.comments.some((comment) => comment.body.includes("自动认领成功")));
 });
 
+test("agent runner records the autoExecute toggle and claim leaves a claimed execution state", async () => {
+  const baseUrl = await startServer();
+  await request(baseUrl, "/api/agents", {
+    method: "POST",
+    body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+  });
+  const task = await request(baseUrl, "/api/tasks", {
+    method: "POST",
+    body: {
+      projectId: "local",
+      title: "Toggle task",
+      status: "todo",
+      priority: "medium",
+      labels: ["frontend"],
+    },
+  });
+
+  const result = await runAgentRunnerOnce({ baseUrl, ownerSessionId: "test-runner", maxClaims: 1 });
+  assert.equal(result.actions[0].type, "agent-claimed");
+  assert.equal(result.actions[0].autoExecute, true);
+
+  const updated = await request(baseUrl, `/api/tasks/${task.body.task.id}`);
+  assert.equal(updated.body.task.executionState, "claimed");
+});
+
 test("agent runner skips unmatched skills instead of stealing work", async () => {
   const baseUrl = await startServer();
   await request(baseUrl, "/api/agents", {

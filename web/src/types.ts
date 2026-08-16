@@ -11,6 +11,15 @@ export const TASK_PRIORITIES = ["none", "urgent", "high", "medium", "low"] as co
 
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export const TASK_EXECUTION_STATES = [
+  "idle",
+  "claimed",
+  "running",
+  "completed",
+  "failed",
+  "interrupted",
+] as const;
+export type TaskExecutionState = (typeof TASK_EXECUTION_STATES)[number];
 export type ActorType = "user" | "agent";
 export type AssigneeTarget = "current-user" | "codex-agent";
 export type IssueRelationType = "parent" | "blocks" | "blocked_by" | "related";
@@ -273,6 +282,8 @@ export interface Task {
   lockExpiresAt?: string | null;
   idempotencyKey?: string | null;
   lastAutonomousAt?: string | null;
+  executionState?: TaskExecutionState;
+  autoExecute?: boolean | null;
   source: "local" | "jira";
   externalOrigin?: string | null;
   externalKey?: string | null;
@@ -371,6 +382,7 @@ export interface TaskDraft {
   assigneeTarget?: AssigneeTarget;
   assignedAgentId?: string;
   squadId?: string;
+  autoExecute?: boolean | null;
   developmentContext: DevelopmentContext | null;
   startDate: string | null;
   dueDate: string | null;
