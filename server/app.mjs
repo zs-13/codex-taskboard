@@ -615,6 +615,27 @@ function parseAssigneeTarget(value) {
   return value;
 }
 
+// assignedAgentId / squadId must use an explicit null to clear or omit; an empty
+// string is rejected so it cannot slip past the existence check as a value.
+function parseDelegationId(value, name) {
+  const id = stringField(value, name, { nullable: true, maxLength: 96 });
+  if (id === "") {
+    throw new ApiError(400, "INVALID_FIELD", `'${name}' cannot be empty; use null to clear`);
+  }
+  return id;
+}
+
+function assertAssigneeExclusive(assigneeTarget, assignedAgentId, squadId) {
+  const present = [assigneeTarget, assignedAgentId, squadId].filter((value) => value !== undefined);
+  if (present.length > 1) {
+    throw new ApiError(
+      400,
+      "ASSIGNEE_CONFLICT",
+      "Specify at most one of 'assigneeTarget', 'assignedAgentId', and 'squadId'",
+    );
+  }
+}
+
 function resolveAssignee(target, actor) {
   if (target === undefined) return actor;
   if (target === "codex-agent") return CODEX_AGENT_ACTOR;
@@ -636,8 +657,12 @@ function parseTaskCreate(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "projectId", "title", "description", "status", "priority", "labels", "sortOrder", "threadId", "threadBinding",
-    "assigneeTarget", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
   ]));
+  const assigneeTarget = parseAssigneeTarget(body.assigneeTarget);
+  const assignedAgentId = parseDelegationId(body.assignedAgentId, "assignedAgentId");
+  const squadId = parseDelegationId(body.squadId, "squadId");
+  assertAssigneeExclusive(assigneeTarget, assignedAgentId, squadId);
   const projectId = validateProjectId(body.projectId ?? DEFAULT_PROJECT_ID);
   const task = {
     projectId,
@@ -649,7 +674,9 @@ function parseTaskCreate(body) {
     sortOrder: body.sortOrder === undefined ? undefined : parseSortOrder(body.sortOrder),
     threadId: parseThreadId(body.threadId),
     threadBinding: parseThreadBinding(body.threadBinding),
-    assigneeTarget: parseAssigneeTarget(body.assigneeTarget),
+    assigneeTarget,
+    assignedAgentId,
+    squadId,
     workflowId: parseWorkflowId(body.workflowId ?? null),
     developmentContext: parseDevelopmentContext(body.developmentContext ?? null),
     startDate: parseDueDate(body.startDate ?? null, "startDate"),
@@ -666,12 +693,15 @@ function parseTaskPatch(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set([
     "version", "projectId", "title", "description", "status", "priority", "labels", "threadId", "threadBinding",
-    "assigneeTarget", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
+    "assigneeTarget", "assignedAgentId", "squadId", "workflowId", "developmentContext", "startDate", "dueDate", "recurrence",
   ]));
   const version = parseVersion(body.version);
   const threadId = parseThreadId(body.threadId);
   const threadBinding = parseThreadBinding(body.threadBinding);
   const assigneeTarget = parseAssigneeTarget(body.assigneeTarget);
+  const assignedAgentId = parseDelegationId(body.assignedAgentId, "assignedAgentId");
+  const squadId = parseDelegationId(body.squadId, "squadId");
+  assertAssigneeExclusive(assigneeTarget, assignedAgentId, squadId);
   const changes = {};
   if (body.projectId !== undefined) changes.projectId = validateProjectId(body.projectId);
   if (body.title !== undefined) changes.title = stringField(body.title, "title", { required: true, maxLength: 240 });
@@ -679,6 +709,8 @@ function parseTaskPatch(body) {
   if (body.status !== undefined) changes.status = parseStatus(body.status);
   if (body.priority !== undefined) changes.priority = parsePriority(body.priority);
   if (body.labels !== undefined) changes.labels = parseLabels(body.labels);
+  if (body.assignedAgentId !== undefined) changes.assignedAgentId = assignedAgentId;
+  if (body.squadId !== undefined) changes.squadId = squadId;
   if (body.workflowId !== undefined) changes.workflowId = parseWorkflowId(body.workflowId);
   if (body.developmentContext !== undefined) changes.developmentContext = parseDevelopmentContext(body.developmentContext);
   if (body.startDate !== undefined) changes.startDate = parseDueDate(body.startDate, "startDate");
@@ -927,10 +959,12 @@ function parseSkillTemplateCreate(body) {  assertPlainObject(body);
 function parseTaskAssign(body) {
   assertPlainObject(body);
   assertAllowedKeys(body, new Set(["version", "agentId", "squadId"]));
+  // Both agentId and squadId may be set together for squad subtasks, but an
+  // empty string must be rejected in favor of an explicit null (clearing).
   return {
     version: parseVersion(body.version),
-    agentId: stringField(body.agentId ?? null, "agentId", { nullable: true, maxLength: 96 }),
-    squadId: stringField(body.squadId ?? null, "squadId", { nullable: true, maxLength: 96 }),
+    agentId: parseDelegationId(body.agentId ?? null, "agentId"),
+    squadId: parseDelegationId(body.squadId ?? null, "squadId"),
   };
 }
 
@@ -3200,8 +3234,12 @@ export function createTaskboardServer(options = {}) {
             if (Object.hasOwn(changes, "projectId")) {
               throw new ApiError(409, "JIRA_PROJECT_MOVE_UNAVAILABLE", "Jira 任务不能移到本地项目");
             }
-            if (assigneeTarget !== undefined) {
-              throw new ApiError(409, "JIRA_ASSIGNEE_UNAVAILABLE", "请在 Jira 中修改经办人");
+            if (
+              assigneeTarget !== undefined
+              || Object.hasOwn(changes, "assignedAgentId")
+              || Object.hasOwn(changes, "squadId")
+            ) {
+              throw new ApiError(409, "JIRA_ASSIGNEE_UNAVAILABLE", "请在 Jira 中修改经办人或委派对象");
             }
             const dueDate = Object.hasOwn(changes, "dueDate") ? changes.dueDate : current.dueDate;
             const recurrence = Object.hasOwn(changes, "recurrence")
@@ -3214,6 +3252,10 @@ export function createTaskboardServer(options = {}) {
           }
           if (assigneeTarget !== undefined) {
             changes.assignee = resolveAssignee(assigneeTarget, actor);
+            // Switching back to current-user / Codex Agent revokes any existing
+            // delegation, matching the TaskEditor's single-select assignee model.
+            changes.assignedAgentId = null;
+            changes.squadId = null;
           }
           let task;
           try {

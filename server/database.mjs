@@ -184,6 +184,39 @@ function taskFieldChanges(task, changes) {
   });
 }
 
+// Task delegation uses two independent columns: assigned_agent_id (executing
+// agent) and squad_id (owning squad). The create/patch contract treats them as
+// mutually exclusive — at most one of the two may carry a non-null value — but
+// squad subtasks intentionally set both (the owning squad plus the member agent
+// that executes it), so assignTask skips the exclusivity check on purpose.
+function assertDelegationExclusive(assignedAgentId, squadId) {
+  if (assignedAgentId != null && squadId != null) {
+    throw new ApiError(
+      400,
+      "ASSIGNEE_CONFLICT",
+      "Specify at most one of 'assignedAgentId' and 'squadId'",
+    );
+  }
+}
+
+function assertDelegationExists(database, assignedAgentId, squadId) {
+  if (assignedAgentId != null) {
+    const agent = database.prepare("SELECT id FROM agents WHERE id = ?").get(assignedAgentId);
+    if (!agent) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${assignedAgentId}' does not exist`);
+  }
+  if (squadId != null) {
+    const squad = database.prepare("SELECT id, name, leader_agent_id FROM squads WHERE id = ?").get(squadId);
+    if (!squad) throw new ApiError(404, "SQUAD_NOT_FOUND", `Squad '${squadId}' does not exist`);
+  }
+}
+
+function delegationColumns(assignedAgentId, squadId) {
+  return {
+    assigned_agent_id: assignedAgentId ?? null,
+    squad_id: squadId ?? null,
+  };
+}
+
 function relationActivityValue(type, task) {
   return {
     type,
@@ -1914,6 +1947,10 @@ export class TaskboardDatabase {
         throw new ApiError(404, "PROJECT_NOT_FOUND", `Project '${input.projectId}' does not exist`);
       }
 
+      assertDelegationExclusive(input.assignedAgentId, input.squadId);
+      assertDelegationExists(this.database, input.assignedAgentId, input.squadId);
+      const delegation = delegationColumns(input.assignedAgentId, input.squadId);
+
       const prefix = project.first_identifier
         ? project.first_identifier.replace(/-\d+$/, "")
         : projectPrefix(project.id);
@@ -1951,10 +1988,11 @@ export class TaskboardDatabase {
           thread_codex_host_id, thread_workspace_path,
           creator_type, creator_id, creator_name, creator_avatar_url,
           assignee_type, assignee_id, assignee_name, assignee_avatar_url,
+          assigned_agent_id, squad_id,
           workflow_id, git_branch, worktree_path, worktree_branch,
           start_date, due_date, recurrence_interval, recurrence_unit,
           archived_at, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
       `).run(
         id,
         identifier,
@@ -1974,6 +2012,8 @@ export class TaskboardDatabase {
         input.assignee.id,
         input.assignee.name,
         input.assignee.avatarUrl,
+        delegation.assigned_agent_id,
+        delegation.squad_id,
         input.workflowId,
         input.developmentContext?.type === "branch" ? input.developmentContext.branch : null,
         input.developmentContext?.type === "worktree" ? input.developmentContext.path : null,
@@ -1996,6 +2036,10 @@ export class TaskboardDatabase {
   updateTask(id, version, changes, threadId, threadBinding, actor) {
     const current = this.#requireTask(id);
     this.#requireVersion(current, version);
+    if (Object.hasOwn(changes, "assignedAgentId") || Object.hasOwn(changes, "squadId")) {
+      assertDelegationExclusive(changes.assignedAgentId, changes.squadId);
+      assertDelegationExists(this.database, changes.assignedAgentId, changes.squadId);
+    }
     const activityChanges = taskFieldChanges(current, changes);
     const targetProject = Object.hasOwn(changes, "projectId")
       ? this.database.prepare("SELECT id, name, workspace_path, labels FROM projects WHERE id = ?").get(changes.projectId)
@@ -2068,6 +2112,18 @@ export class TaskboardDatabase {
           "assignee_avatar_url = ?",
         );
         values.push(value.type, value.id, value.name, value.avatarUrl);
+        continue;
+      }
+      if (key === "assignedAgentId") {
+        // Setting the executing agent clears the owning squad (one-or-the-other).
+        assignments.push("assigned_agent_id = ?", "squad_id = ?");
+        values.push(value ?? null, null);
+        continue;
+      }
+      if (key === "squadId") {
+        // Setting the owning squad clears the executing agent (one-or-the-other).
+        assignments.push("squad_id = ?", "assigned_agent_id = ?");
+        values.push(value ?? null, null);
         continue;
       }
       assignments.push(`${columns[key]} = ?`);
@@ -2713,14 +2769,10 @@ export class TaskboardDatabase {
   assignTask(id, version, input, actor) {
     const current = this.#requireTask(id);
     this.#requireVersion(current, version);
-    if (input.agentId) {
-      const agent = this.database.prepare("SELECT id, name FROM agents WHERE id = ?").get(input.agentId);
-      if (!agent) throw new ApiError(404, "AGENT_NOT_FOUND", `Agent '${input.agentId}' does not exist`);
-    }
-    if (input.squadId) {
-      const squad = this.database.prepare("SELECT id, name, leader_agent_id FROM squads WHERE id = ?").get(input.squadId);
-      if (!squad) throw new ApiError(404, "SQUAD_NOT_FOUND", `Squad '${input.squadId}' does not exist`);
-    }
+    // Squad subtasks legitimately carry both the owning squad and the executing
+    // member agent, so assignTask intentionally allows both columns to be set.
+    assertDelegationExists(this.database, input.agentId, input.squadId);
+    const delegation = delegationColumns(input.agentId, input.squadId);
     const timestamp = now();
     this.database.exec("BEGIN IMMEDIATE");
     try {
@@ -2728,7 +2780,7 @@ export class TaskboardDatabase {
         UPDATE tasks
         SET assigned_agent_id = ?, squad_id = ?, version = version + 1, updated_at = ?
         WHERE id = ? AND version = ?
-      `).run(input.agentId, input.squadId, timestamp, current.id, version);
+      `).run(delegation.assigned_agent_id, delegation.squad_id, timestamp, current.id, version);
       if (result.changes !== 1) this.#throwMissingOrConflict(id, version);
       this.#recordTaskActivity(current.id, actor, taskFieldChanges(current, {
         assignedAgentId: input.agentId,
