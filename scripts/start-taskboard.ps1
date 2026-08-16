@@ -23,6 +23,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Force UTF-8 on the console and in pipes to native commands so non-ASCII text
+# (Chinese titles, paths, logs) is never re-encoded through the ANSI code page
+# (GBK on zh-CN Windows) and turned into mojibake.
+chcp 65001 > $null
+try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch { }
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $dataDir = Join-Path $repoRoot ".data"
 $logDir = Join-Path $dataDir "logs"
