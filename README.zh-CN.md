@@ -341,6 +341,7 @@ npm run codex:inject -- --port 9229 --open
 | `CODEX_TASKBOARD_DATA_DIR` | `.data` | SQLite 数据目录 |
 | `CODEX_TASKBOARD_URL` | `http://127.0.0.1:47823` | CLI API 源地址 |
 | `CODEX_TASKBOARD_AUTO_EXECUTE` | `1` | 任务被智能体认领（或指派给具体智能体）后，自动启动一个无头 Codex 回合，让任务真正开始执行，无需手动打开对话。设为 `0` 则回到手动「在对话中打开」。每个任务还可通过「自动执行」开关（新建/编辑）覆盖全局默认值。 |
+| `CODEX_TASKBOARD_AUTO_EXECUTE_MAX_RETRIES` | `2` | 每个任务连续自动执行失败的次数上限；达到上限后该任务停止自动执行（降级为手动）。避免 runner 反复重触发一直失败的任务、刷屏「自动认领成功」评论。成功回合会重置计数。 |
 
 开启自动执行后，被认领的任务会经历 `executionState`（`claimed` → `running` → `completed`/`failed`/`interrupted`）。任务卡片与详情面板会展示该状态，无头智能体也会把进度评论实时写入任务，无需打开对话即可查看。
 

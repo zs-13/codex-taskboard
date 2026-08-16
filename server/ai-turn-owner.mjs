@@ -36,6 +36,14 @@ child.once("error", (error) => {
   process.exit(1);
 });
 child.once("exit", (code, signal) => {
+  if (process.platform === "win32") {
+    // On Windows `process.kill(pid, signal)` does not re-raise a POSIX signal;
+    // for SIGINT/SIGBREAK it sends a console event (GenerateConsoleCtrlEvent)
+    // that terminates this process with STATUS_CONTROL_C_EXIT (0xC000013A),
+    // which the server records as a misleading "killed mid-run" exit. Exit with
+    // a stable non-zero code instead so the failure reason stays readable.
+    process.exit(signal ? 1 : (code ?? 1));
+  }
   if (signal) process.kill(process.pid, signal);
   else process.exit(code ?? 1);
 });

@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { createTaskboardServer } from "../server/index.mjs";
 
-async function createServerFixture() {
+async function createServerFixture(options = {}) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "taskboard-auto-execute-"));
   const workspacePath = path.join(directory, "workspace");
   await mkdir(workspacePath);
@@ -29,6 +29,10 @@ if (args[0] === "debug") {
   process.stdin.resume();
   process.stdin.on("end", () => {
     process.stdout.write('{"type":"thread.started","thread_id":"session-1"}\\n');
+    if (process.env.FAKE_CODEX_FAIL) {
+      process.stdout.write('{"type":"turn.failed","error":{"message":"fixture forced failure"}}\\n');
+      return;
+    }
     process.stdout.write('{"type":"item.completed","item":{"type":"agent_message","text":"auto-executed ok"}}\\n');
     process.stdout.write('{"type":"turn.completed"}\\n');
   });
@@ -44,6 +48,10 @@ if (args[0] === "debug") {
     codexExecutable,
     codexStatePath,
     skillPath: "/fixture/manage-taskboard/SKILL.md",
+    processEnv: {
+      ...process.env,
+      ...(options.failCodex ? { FAKE_CODEX_FAIL: "1" } : {}),
+    },
   });
   const address = await app.listen({ port: 0 });
   return {
@@ -281,6 +289,65 @@ test("auto-execute reuses a healthy completed thread and does not duplicate thre
     const runningNow = afterTaskThreads.filter((thread) => thread.status === "running" && thread.currentRun);
     assert.equal(runningNow.length, 1, "exactly one running thread after re-execution");
     assert.equal(runningNow[0].id, taskThreads[0].id, "re-execution must reuse the existing thread");
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("auto-execute failure posts a failure comment and stops retrying after the cap", async () => {
+  const fixture = await createServerFixture({ failCodex: true });
+  try {
+    await request(fixture.baseUrl, "/api/agents", {
+      method: "POST",
+      body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+    });
+    const created = await request(fixture.baseUrl, "/api/tasks", {
+      method: "POST",
+      body: { projectId: "local", title: "Failing task", status: "todo", labels: ["frontend"] },
+    });
+    const taskId = created.body.task.id;
+
+    async function waitForFailureComments(minimum, timeoutMs = 5_000) {
+      const deadline = Date.now() + timeoutMs;
+      let failure = [];
+      while (Date.now() < deadline) {
+        const comments = await request(fixture.baseUrl, `/api/tasks/${taskId}/comments`);
+        failure = comments.body.comments.filter((comment) => comment.body.includes("自动执行失败"));
+        if (failure.length >= minimum) return failure;
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      }
+      return failure;
+    }
+
+    // First claim starts a headless turn that fails; the failure reason is
+    // posted on the task instead of the board silently looking stalled.
+    await request(fixture.baseUrl, `/api/tasks/${taskId}/claim`, {
+      method: "POST",
+      body: { agentId: "builder", ownerSessionId: "auto-execute-fail", ttlSeconds: 900 },
+    });
+    let failureComments = await waitForFailureComments(1);
+    assert.ok(failureComments.length >= 1, "a failure comment should be posted");
+    assert.match(failureComments[0].body, /fixture forced failure/);
+    const afterFirst = await request(fixture.baseUrl, `/api/tasks/${taskId}`);
+    assert.equal(afterFirst.body.task.executionState, "failed");
+
+    // Second trigger is still under the retry cap: a fresh turn is started.
+    const second = await request(fixture.baseUrl, `/api/tasks/${taskId}/execute`, {
+      method: "POST",
+      body: {},
+    });
+    assert.equal(second.body.started, true);
+    failureComments = await waitForFailureComments(2);
+    assert.ok(failureComments.length >= 2, "a second failure comment should be posted");
+
+    // Third trigger exceeds the cap: auto-execute is stopped and the task is
+    // left for manual execution instead of re-triggering forever.
+    const third = await request(fixture.baseUrl, `/api/tasks/${taskId}/execute`, {
+      method: "POST",
+      body: {},
+    });
+    assert.equal(third.body.started, false);
+    assert.equal(third.body.reason, "auto-execute-stopped");
   } finally {
     await fixture.close();
   }

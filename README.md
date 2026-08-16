@@ -417,6 +417,7 @@ how to avoid them:
 | `CODEX_TASKBOARD_DATA_DIR` | `.data` | SQLite data directory |
 | `CODEX_TASKBOARD_URL` | `http://127.0.0.1:47823` | CLI API origin |
 | `CODEX_TASKBOARD_AUTO_EXECUTE` | `1` | When a task is claimed by an agent (or assigned to a specific agent), automatically start a headless Codex turn so the task actually executes without opening a conversation. Set `0` to fall back to manual "open in conversation". A per-task `autoExecute` flag (create/edit) overrides the global default for that task. |
+| `CODEX_TASKBOARD_AUTO_EXECUTE_MAX_RETRIES` | `2` | Consecutive failed auto-execute turns allowed per task before auto-execution stops for that task (downgrading to manual). Prevents the runner from re-triggering a task that keeps failing and spamming "auto-claimed" comments. A successful turn resets the counter. |
 
 When auto-execution is on, a claimed task transitions through `executionState` (`claimed` → `running` → `completed`/`failed`/`interrupted`). The task card and detail panel show that state, and the headless agent streams progress comments into the task without you opening a conversation.
 

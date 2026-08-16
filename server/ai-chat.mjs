@@ -98,6 +98,22 @@ export class AiChatService {
     return run;
   }
 
+  // Resolve once a started turn has settled (completed/failed/interrupted).
+  // Returns the finalized run record, or the current record when the turn is
+  // already finished. Used by server-owned callers (e.g. auto-execute) to
+  // observe the outcome without owning the child process.
+  async waitForRun(runId) {
+    const completion = this.completions.get(runId);
+    if (completion) {
+      try {
+        return await completion;
+      } catch {
+        return this.getRun(runId);
+      }
+    }
+    return this.getRun(runId);
+  }
+
   subscribe(threadId, listener) {
     let listeners = this.listeners.get(threadId);
     if (!listeners) {
@@ -187,7 +203,7 @@ export class AiChatService {
     return this.database.deleteAiChatThread(threadId);
   }
 
-  async startTurn(threadId, input) {
+  async startTurn(threadId, input, options = {}) {
     let thread = this.getThread(threadId);
     if (this.#threadIsActive(thread)) {
       throw new ApiError(
@@ -226,8 +242,21 @@ export class AiChatService {
         "danger-full-access must be confirmed for every turn",
       );
     }
-    const model = this.#resolveModel(catalog, thread.model);
-    this.#validateReasoningEffort(model, thread.reasoningEffort);
+    // For a resuming turn the Codex session's recorded model governs; the
+    // thread's stored model may have drifted from it (e.g. after a model
+    // update), and buildCodexArgs omits `-m` on resume for exactly that reason.
+    // Resolve it tolerantly so a stale stored model cannot block resuming.
+    let model = null;
+    if (thread.codexThreadId) {
+      try {
+        model = this.#resolveModel(catalog, thread.model);
+      } catch {
+        model = null;
+      }
+    } else {
+      model = this.#resolveModel(catalog, thread.model);
+    }
+    if (model) this.#validateReasoningEffort(model, thread.reasoningEffort);
     if (resolved.workspacePath !== thread.origin.workspacePath) {
       throw new ApiError(
         409,
@@ -338,7 +367,13 @@ export class AiChatService {
         },
       });
 
-      const active = { child, threadId, interrupted: false, temporaryDirectory };
+      const active = {
+        child,
+        threadId,
+        interrupted: false,
+        temporaryDirectory,
+        autoExecute: options.autoExecute === true,
+      };
       this.active.set(run.id, active);
       const finalization = completion.then(
         (result) => this.#finishRun({
@@ -583,14 +618,25 @@ export class AiChatService {
       const boundIssueId = taskThread?.origin?.issueId;
       if (boundIssueId) {
         const terminalState = status === "completed" ? "completed" : status === "failed" ? "failed" : "interrupted";
+        const agentActor = {
+          type: "agent",
+          id: "codex-agent",
+          name: "Codex Agent",
+          avatarUrl: null,
+        };
         try {
-          this.database.setTaskExecutionState(boundIssueId, terminalState, {
-            type: "agent",
-            id: "codex-agent",
-            name: "Codex Agent",
-            avatarUrl: null,
-          });
+          this.database.setTaskExecutionState(boundIssueId, terminalState, agentActor);
         } catch {}
+        // Surface a clear failure reason on the task for headless auto-execute
+        // turns instead of leaving the board looking silently stalled.
+        if (active.autoExecute && status === "failed") {
+          try {
+            this.database.createComment(boundIssueId, {
+              body: `自动执行失败：${cappedError(publicError || "Codex turn failed").slice(0, 2_000)}`,
+              actor: agentActor,
+            });
+          } catch {}
+        }
       }
       return updated;
     } finally {
