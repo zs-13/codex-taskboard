@@ -70,7 +70,8 @@ test("the CDP bridge accepts service ensure and native task conversation start a
   assert.match(source, /"thread\/read"/);
   assert.match(source, /normalizeWorkspaceRoot\(result\.thread\.cwd\) === normalizedTargetRoot/);
   assert.match(source, /"thread\/name\/set"/);
-  assert.match(source, /result\.thread\.name === title/);
+  assert.match(source, /void nameSetPromise;/);
+  assert.match(source, /\.catch\(\(\) => \{\}\)/);
   assert.match(source, /const taskConversationOperations = new Map\(\)/);
   assert.match(source, /taskConversationOperations\.get\(request\.taskId\)/);
   assert.match(source, /const taskConversationAppServerTimeoutMs = 30_000/);
