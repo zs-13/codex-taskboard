@@ -59,9 +59,27 @@ if (args[0] === "debug") {
     baseUrl: `http://127.0.0.1:${address.port}`,
     async close() {
       await app.close();
-      await rm(directory, { recursive: true, force: true });
+      await removeTreeRetrying(directory);
     },
   };
+}
+
+// On Windows a detached turn process (ai-turn-owner -> codex) killed by
+// app.close() may still hold the workspace as its cwd for a few milliseconds;
+// retry the recursive rm so teardown is not flaky with EBUSY.
+async function removeTreeRetrying(directory) {
+  let lastError;
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      lastError = error;
+      if (error.code !== "EBUSY") throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw lastError;
 }
 
 async function request(baseUrl, pathname, options = {}) {
@@ -363,7 +381,12 @@ test("auto-execute failure posts a failure comment and stops retrying after the 
     assert.ok(failureComments.length >= 1, "a failure comment should be posted");
     assert.match(failureComments[0].body, /fixture forced failure/);
     const afterFirst = await request(fixture.baseUrl, `/api/tasks/${taskId}`);
-    assert.equal(afterFirst.body.task.executionState, "failed");
+    // The fixture codex never claims the task, so after the failed turn the
+    // task returns to the claimable pool (idle) instead of sitting in a
+    // terminal state — the executor-claims-itself design (MUTI-32). The failure
+    // reason is surfaced via the failure comment above; the retry cap below
+    // still stops re-triggering.
+    assert.equal(afterFirst.body.task.executionState, "idle");
 
     // Second trigger is still under the retry cap: a fresh turn is started.
     const second = await request(fixture.baseUrl, `/api/tasks/${taskId}/execute`, {
