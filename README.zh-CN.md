@@ -190,6 +190,8 @@ npm run taskctl -- issue create \
 
 请运行 `npm link`，以便在 shell 路径中使用 `taskctl`。设置 `CODEX_TASKBOARD_URL`，可让 CLI 指向另一个本地或局域网服务。云端部署通过**回环 companion**（本机 loopback 配套服务，不是「伴侣」）使用 `taskctl cloud login` 配置。
 
+在 Windows PowerShell 下，含中文的标题/描述请优先通过 `--description-file`（UTF-8 文件）传入，或先执行 `chcp 65001` 并设置 `$OutputEncoding`——内联中文会被 ANSI 代码页破坏（见上文「乱码」坑位）。
+
 ## 安装 Codex Skill
 
 将 `skills/manage-taskboard` 复制或符号链接到 Codex Skill 目录，然后启动一个新的 Codex 任务：
@@ -299,6 +301,11 @@ npm run codex:inject -- --port 9229 --open
 5. **Windows 一键设置（可选）。** 运行 `scripts\setup-taskboard-autostart.ps1` 会创建「Codex Taskboard」桌面快捷方式（固定端口启动器）并注册常驻注入器的开机自启，安装后双击即可打开面板，重启电脑也能自动就绪。
 
 6. **任务管理器里出现十几个 `ChatGPT.exe`/`codex` 是正常的。** Codex 桌面应用基于 Chromium，一个窗口会拆成多个系统进程：主浏览器进程 + GPU、网络、存储、崩溃上报（crashpad）、以及每个标签页/面板一个渲染进程。它们共用同一个进程名，所以单个 Codex 窗口在任务管理器里会显示为 10+ 条。判断「是不是只开了一个」看主进程：只有一个**不带 `--type=`**（且带 `--user-data-dir=` 和 `--remote-debugging-port=`）的 `ChatGPT.exe` 就只有一个窗口。启动器还会在后台常驻几个 `node.exe`（服务、注入器、agent runner），这是有意设计——关掉 Codex 后任务进度和历史仍持续更新。
+
+7. **中文标题/描述变成 `��ϲ` 这样的乱码。** 在中文 Windows 上，PowerShell 5.1 向原生命令（`taskctl`、`multica`、`node` 等）传参时使用 ANSI 代码页（GBK / cp936）编码，**内联或管道输入的中文在到达 Taskboard 之前就已经被破坏了**。Taskboard 只会按 UTF-8 原样存储收到的内容、不会二次转码，所以「到达即乱码」的标题会一直乱码。当需要在 Windows PowerShell 下创建含中文的 issue/任务/评论时：
+   - **优先用文件传参**——`--description-file <file>` / `--content-file <file>`（把文件保存为 UTF-8），而不是内联/管道中文。`cli/taskctl.mjs` 以 UTF-8 读取这些文件，内容能完好送达。
+   - **或者先强制整段会话用 UTF-8**——在调用 `taskctl` / `multica` 前先执行 `chcp 65001` 和 `$OutputEncoding = [System.Text.Encoding]::UTF8`。
+   自带的启动脚本（`scripts/start-taskboard.ps1`、`setup-taskboard-autostart.ps1`、`install-codex-plugin.ps1`）已强制 UTF-8，覆盖它们自身的输出和原生命令管道。
 
 ## 配置
 

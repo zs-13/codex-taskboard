@@ -195,6 +195,8 @@ npm run taskctl -- issue create \
 
 Use `npm link` if you want `taskctl` on your shell path. Set `CODEX_TASKBOARD_URL` to point the CLI at another local or LAN service. Cloud deployments are configured through the **loopback companion** (device-local loopback service for auth and path mapping—not a chat persona) with `taskctl cloud login`.
 
+On Windows PowerShell, pass non-ASCII titles/descriptions via `--description-file` (a UTF-8 file) rather than inline, or run `chcp 65001` and set `$OutputEncoding` first — inline Chinese gets mangled through the ANSI code page (see the mojibake pitfall above).
+
 ## Install the Codex Skill
 
 Copy or symlink `skills/manage-taskboard` into the Codex skills directory, then start a new Codex task:
@@ -338,6 +340,25 @@ how to avoid them:
    marker (the main process: `--user-data-dir=... --remote-debugging-port=...`).
    The launcher additionally keeps a small set of `node.exe` background services
    (service, injector, agent runner) alive on purpose.
+
+7. **Chinese text turns into `��ϲ`-style mojibake in titles/descriptions.** On
+   Chinese Windows, PowerShell 5.1 encodes arguments it hands to native commands
+   (`taskctl`, `multica`, `node`, ...) using the ANSI code page (GBK / cp936), so
+   inline or piped Chinese is corrupted *before* it ever reaches the Taskboard.
+   The Taskboard stores exactly what it receives as UTF-8 and never re-encodes
+   it, so a title that is already mojibake on arrival stays mojibake. When you
+   need to create issues/tasks/comments with non-ASCII text from Windows
+   PowerShell:
+   - **Prefer file-based input** — `--description-file <file>` /
+     `--content-file <file>` (write the file as UTF-8) instead of inline/piped
+     Chinese. `cli/taskctl.mjs` reads those files as UTF-8, so the text arrives
+     intact.
+   - **Or force UTF-8 for the whole session** — run `chcp 65001` and
+     `$OutputEncoding = [System.Text.Encoding]::UTF8` in the same PowerShell
+     window before calling `taskctl` / `multica`.
+   The bundled launcher scripts (`scripts/start-taskboard.ps1`,
+   `setup-taskboard-autostart.ps1`, `install-codex-plugin.ps1`) already force
+   UTF-8 for their own output and native-command pipes.
 
 ## Configuration
 
