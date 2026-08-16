@@ -89,17 +89,35 @@ async function createAgentAndTask(baseUrl, overrides = {}) {
   return created.body.task;
 }
 
-// Force the old fake-execution state on a task directly: pre-claimed
-// (in_progress), marked completed, lock expired, no active AiChat turn.
-function forceStuckState(directory, taskId) {
+// Force an execution state on a task directly (default: the old fake-execution
+// state — pre-claimed in_progress, marked completed, lock expired, no active
+// turn).
+function forceTaskState(directory, taskId, overrides = {}) {
   const database = new TaskboardDatabase(path.join(directory, "taskboard.sqlite"));
   const past = new Date(Date.now() - 60_000).toISOString();
+  const future = new Date(Date.now() + 60_000).toISOString();
+  const fields = {
+    status: "in_progress",
+    lock_owner: "builder",
+    lock_expires_at: past,
+    execution_state: "completed",
+    thread_id: null,
+    ...overrides,
+  };
   database.database.prepare(`
     UPDATE tasks
-    SET status = 'in_progress', lock_owner = 'builder', lock_expires_at = ?,
-      execution_state = 'completed', version = version + 1, updated_at = ?
+    SET status = ?, lock_owner = ?, lock_expires_at = ?,
+      execution_state = ?, thread_id = ?, version = version + 1, updated_at = ?
     WHERE id = ?
-  `).run(past, past, taskId);
+  `).run(
+    fields.status,
+    fields.lock_owner,
+    fields.lock_expires_at,
+    fields.execution_state,
+    fields.thread_id,
+    past,
+    taskId,
+  );
   database.close();
 }
 
@@ -107,7 +125,7 @@ test("recover resets a fake-executed stuck task back to the claimable pool", asy
   const fixture = await createServerFixture();
   try {
     const task = await createAgentAndTask(fixture.baseUrl);
-    forceStuckState(fixture.directory, task.id);
+    forceTaskState(fixture.directory, task.id);
 
     const recovered = await request(fixture.baseUrl, `/api/tasks/${task.id}/recover`, {
       method: "POST",
@@ -123,16 +141,37 @@ test("recover resets a fake-executed stuck task back to the claimable pool", asy
   }
 });
 
+test("recover refuses a task with a live execution state", async () => {
+  const fixture = await createServerFixture();
+  try {
+    const task = await createAgentAndTask(fixture.baseUrl);
+    // A task being executed right now: running execution state, no thread yet.
+    forceTaskState(fixture.directory, task.id, {
+      execution_state: "running",
+      lock_owner: null,
+    });
+
+    const recovered = await request(fixture.baseUrl, `/api/tasks/${task.id}/recover`, {
+      method: "POST",
+      body: {},
+    });
+    assert.equal(recovered.response.status, 200);
+    assert.equal(recovered.body.recovered, false);
+    assert.equal(recovered.body.reason, "not-stuck");
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("recover refuses a task that still holds a valid lock", async () => {
   const fixture = await createServerFixture();
   try {
-    const task = await createAgentAndTask(fixture.baseUrl, { autoExecute: false });
-    // Claim with autoExecute disabled reserves the task: in_progress + valid lock.
-    const claimed = await request(fixture.baseUrl, `/api/tasks/${task.id}/claim`, {
-      method: "POST",
-      body: { agentId: "builder", ownerSessionId: "recover-test", ttlSeconds: 900 },
+    const task = await createAgentAndTask(fixture.baseUrl);
+    // Completed execution state but the pre-claim lock is still valid: the
+    // executor may still be finishing up; do not reset.
+    forceTaskState(fixture.directory, task.id, {
+      lock_expires_at: new Date(Date.now() + 60_000).toISOString(),
     });
-    assert.equal(claimed.response.status, 200);
 
     const recovered = await request(fixture.baseUrl, `/api/tasks/${task.id}/recover`, {
       method: "POST",
@@ -147,11 +186,35 @@ test("recover refuses a task that still holds a valid lock", async () => {
   }
 });
 
+test("recover refuses a task that is bound to a conversation", async () => {
+  const fixture = await createServerFixture();
+  try {
+    const task = await createAgentAndTask(fixture.baseUrl);
+    // Completed execution with a conversation binding: a headless turn claimed
+    // it via taskctl move (which does not take a lock). It executed — keep it.
+    forceTaskState(fixture.directory, task.id, {
+      lock_owner: null,
+      thread_id: "codex-thread-1",
+    });
+
+    const recovered = await request(fixture.baseUrl, `/api/tasks/${task.id}/recover`, {
+      method: "POST",
+      body: {},
+    });
+    assert.equal(recovered.response.status, 200);
+    assert.equal(recovered.body.recovered, false);
+    assert.equal(recovered.body.reason, "bound");
+    assert.equal(recovered.body.task.status, "in_progress");
+  } finally {
+    await fixture.close();
+  }
+});
+
 test("the agent runner recovers a stuck task and re-triggers execution in the same pass", async () => {
   const fixture = await createServerFixture();
   try {
     const task = await createAgentAndTask(fixture.baseUrl);
-    forceStuckState(fixture.directory, task.id);
+    forceTaskState(fixture.directory, task.id);
 
     const result = await runAgentRunnerOnce({ baseUrl: fixture.baseUrl, ownerSessionId: "test-runner", maxClaims: 2 });
     const types = result.actions.map((action) => action.type);

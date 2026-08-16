@@ -2008,11 +2008,12 @@ export function createTaskboardServer(options = {}) {
     };
   }
 
-  // Return a stuck/orphaned task (pre-claimed, marked running/completed, but
+  // Return a stuck/orphaned task (pre-claimed, marked completed/failed, but
   // never actually executed) to the claimable pool so the runner can re-trigger
-  // it under the executor-claims-itself mechanism. Refuses when a turn is
-  // actively running, the task is bound to a conversation (a headless turn is
-  // legitimately executing it), or a valid lock is held.
+  // it under the executor-claims-itself mechanism. Only a terminal execution
+  // state with no conversation binding is eligible: claimed/running means a turn
+  // is live, a thread binding means a turn legitimately owns the task, and a
+  // valid lock means someone still holds it.
   function recoverStuckTask(taskId, actor) {
     const task = database.getTask(taskId);
     if (!task || task.archivedAt != null) {
@@ -2021,12 +2022,12 @@ export function createTaskboardServer(options = {}) {
     if (task.status !== "todo" && task.status !== "in_progress") {
       return { recovered: false, reason: "not-stuck", task };
     }
-    if (task.executionState === "idle") {
+    if (!["completed", "failed", "interrupted"].includes(task.executionState)) {
       return { recovered: false, reason: "not-stuck", task };
     }
     if (task.threadId || task.threadBinding) {
       // Bound to a conversation: a headless turn claimed it via taskctl move
-      // (which does not take a task lock). It is executing — do not reset.
+      // (which does not take a task lock). It executed — do not reset.
       return { recovered: false, reason: "bound", task };
     }
     if (database.listAiChatThreadsForIssue(task.id).some((candidate) => candidate.currentRun)) {
