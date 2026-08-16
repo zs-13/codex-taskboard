@@ -62,6 +62,44 @@ npm run codex
 
 > **Windows 一键设置（可选）：** 克隆后运行 `scripts\setup-taskboard-autostart.ps1`，会创建「Codex Taskboard」桌面快捷方式并注册常驻注入器的开机自启。之后双击该快捷方式即可打开面板，无需终端。可规避的坑见[让侧边栏面板一直可用](#让侧边栏面板一直可用避开这些坑)。
 
+## 如何打开任务面板（Windows / macOS）
+
+任务面板存在于**由启动器拉起的那个 Codex 窗口的右侧侧边栏**里——它是通过 CDP 注入的，从应用图标 / 开始菜单直接打开的 Codex 窗口不会显示面板。想看面板，请始终通过下面的启动器打开 Codex。
+
+**Windows**
+
+1. 双击 `scripts\start-taskboard.bat`（或从终端运行）：
+
+   ```bat
+   cd codex-taskboard
+   scripts\start-taskboard.bat
+   ```
+
+   完成一次性的设置后，也可以直接双击桌面上的「Codex Taskboard」快捷方式——见 `scripts\setup-taskboard-autostart.ps1`。
+
+2. 会打开一个带任务面板的 Codex 窗口，面板在右侧侧边栏。服务和 agent runner 会一直在后台运行；关掉 Codex 窗口只是关窗口，不会关掉 taskboard。
+
+**macOS**
+
+1. 从终端运行启动器：
+
+   ```bash
+   cd codex-taskboard
+   ./scripts/start-taskboard.sh
+   ```
+
+   或用等效的 `npm run codex`，或在 Codex 中打开本仓库文件夹后点击内置的「启动」动作。
+
+2. 会打开一个带任务面板的 Codex 窗口，面板在右侧侧边栏。
+
+**怎么用**
+
+- 面板就是完整的任务看板：可以创建和移动议题，在**看板 / 列表 / 甘特图 / 仪表盘**之间切换，用**小队**分区组织智能体、小组并派活。
+- 智能体（通过自带的 `manage-taskboard` skill / `taskctl` CLI）会认领并执行议题，进度和评论实时同步。
+- 数据保存在本地（默认 `.data/taskboard.sqlite`），关掉 Codex 也不会丢。重启后，用同一条启动命令重新打开 Codex，面板就会回来。
+
+如果面板没有出现，最常见的原因是用应用图标开的 Codex 而不是启动器——见[让侧边栏面板一直可用（避开这些坑）](#让侧边栏面板一直可用避开这些坑)。
+
 ## 安装为原生 Codex 插件
 
 本仓库已按 **Codex 插件** 格式打包（`.codex-plugin/plugin.json` + 仓库级 marketplace `.agents/plugins/marketplace.json`），可以从 GitHub 链接导入，并在 Codex 的 Plugins 侧边栏中出现。自带的 `manage-taskboard` skill 会成为 Codex 智能体可用的能力。

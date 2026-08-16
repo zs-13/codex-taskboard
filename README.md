@@ -67,6 +67,44 @@ npm run codex
 > [Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls)
 > for the pitfalls this avoids.
 
+## How to open the Taskboard panel (Windows / macOS)
+
+The Taskboard panel lives in the **right sidebar of a Codex window the launcher started** — it is injected over CDP, so a Codex window opened from the app icon / Start menu will not show it. To see the panel, always open Codex through the launcher below.
+
+**Windows**
+
+1. Double-click `scripts\start-taskboard.bat` (or run it from a terminal):
+
+   ```bat
+   cd codex-taskboard
+   scripts\start-taskboard.bat
+   ```
+
+   After the one-time setup, you can also double-click the **Codex Taskboard** desktop shortcut — see `scripts\setup-taskboard-autostart.ps1`.
+
+2. A Codex window opens with the Taskboard panel in the right sidebar. The service and agent runner keep running in the background; closing the Codex window only closes the window, not the taskboard.
+
+**macOS**
+
+1. Run the launcher from a terminal:
+
+   ```bash
+   cd codex-taskboard
+   ./scripts/start-taskboard.sh
+   ```
+
+   or the equivalent `npm run codex`, or the built-in Codex action `启动` / "Launch" after opening the folder in Codex.
+
+2. A Codex window opens with the Taskboard panel in the right sidebar.
+
+**How to use it**
+
+- The panel is a full task board: create and move issues, switch between **看板 / 列表 / 甘特图 / 仪表盘**, and use the **小队** zone to organize agents, teams, and assign work.
+- Agents (via the bundled `manage-taskboard` skill / `taskctl` CLI) claim and execute issues; progress and comments sync live.
+- Data is stored locally (`.data/taskboard.sqlite` by default) and survives closing Codex. After a restart, reopen Codex through the same launcher command to bring the panel back.
+
+If the panel does not appear, the most common cause is opening Codex from the app icon instead of the launcher — see [Keep the sidebar panel available](#keep-the-sidebar-panel-available-avoid-these-pitfalls).
+
 ## Install as a native Codex plugin
 
 This repository is packaged as a **Codex plugin** (`.codex-plugin/plugin.json` + repo-scoped marketplace `.agents/plugins/marketplace.json`), so Codex can install it from the GitHub link and show it in the Plugins sidebar. The bundled `manage-taskboard` skill becomes available to Codex agents.
