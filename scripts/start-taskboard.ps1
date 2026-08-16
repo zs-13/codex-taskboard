@@ -116,6 +116,16 @@ if (-not $CodexAppPath) {
     if ($candidate) { $CodexAppPath = $candidate }
   }
 }
+# WindowsApps is usually not listable without elevation, so the scan above
+# silently finds nothing even when the Codex app is installed. Fall back to the
+# registered Appx package (queryable by any user) before giving up.
+if (-not $CodexAppPath) {
+  $package = Get-AppxPackage -Name "*OpenAI.Codex*" -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($package -and $package.InstallLocation) {
+    $candidate = Join-Path $package.InstallLocation "app\ChatGPT.exe"
+    if (Test-Path $candidate) { $CodexAppPath = $candidate }
+  }
+}
 
 # 4. Launch Codex with CDP when it is not already reachable, or when the
 #    existing instance is orphaned (the window was closed but the process
