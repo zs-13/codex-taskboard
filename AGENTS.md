@@ -74,6 +74,10 @@ The sidebar panel itself is still rendered by the CDP injector (`npm run codex`)
   macOS `9231`).
 - The service and agent runner keep running when Codex closes on purpose (that is
   what powers real-time progress). Closing Codex does not delete tasks.
+- Many `ChatGPT.exe`/`codex` entries in Task Manager is expected, not a bug: the
+  Codex desktop app is Chromium-based, so one window runs as a main process plus
+  GPU/network/storage/crashpad/renderer helpers that share the process name.
+  Exactly one window = exactly one main `ChatGPT.exe` with no `--type=` marker.
 - Windows one-click setup: `scripts\setup-taskboard-autostart.ps1` creates a
   "Codex Taskboard" desktop shortcut and a logon autostart for the injector.
 
