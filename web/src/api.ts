@@ -72,8 +72,37 @@ export function resolveTaskboardUrl(path: string): string {
   return new URL(path.replace(/^\//, ""), document.baseURI).href;
 }
 
+/** RFC 7230 header value: HTAB, SP, or printable ASCII (0x21–0x7E). */
+const VALID_HEADER_VALUE = /^[\t\x20-\x7E]*$/;
+
+/** Make any value safe to pass to the Headers constructor. User-provided
+ *  content (e.g. a Chinese squad name) must never be able to crash the
+ *  request with "Failed to construct 'Headers'": non-ASCII and control
+ *  characters are percent-encoded, everything else is passed through. */
+function headerSafeValue(value: unknown): string {
+  const text = typeof value === "string" ? value : String(value ?? "");
+  return VALID_HEADER_VALUE.test(text) ? text : encodeURIComponent(text);
+}
+
+/** Sanitize a RequestInit.headers bag before it reaches `new Headers(...)`,
+ *  regardless of whether the caller passed a plain object, a Headers
+ *  instance, or an array of tuples. */
+function headerSafe(init: RequestInit | undefined): RequestInit | undefined {
+  if (!init || init.headers === undefined) return init;
+  const safe: Record<string, string> = {};
+  const headers = init.headers;
+  if (headers instanceof Headers) {
+    headers.forEach((value, name) => { safe[name] = headerSafeValue(value); });
+  } else if (Array.isArray(headers)) {
+    for (const [name, value] of headers) safe[String(name)] = headerSafeValue(value);
+  } else {
+    for (const [name, value] of Object.entries(headers)) safe[name] = headerSafeValue(value);
+  }
+  return { ...init, headers: safe };
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = new Headers(init?.headers);
+  const headers = new Headers(headerSafe(init)?.headers);
   if (init?.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
   const method = (init?.method ?? "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {
@@ -524,7 +553,9 @@ export async function createSquad(input: {
 }): Promise<Squad> {
   const data = await request<{ squad: Squad }>("/api/squads", {
     method: "POST",
-    headers: { "Idempotency-Key": `squad-${encodeURIComponent(input.name)}-${input.leaderAgentId}` },
+    headers: {
+      "Idempotency-Key": `squad-${encodeURIComponent(input.name)}-${encodeURIComponent(input.leaderAgentId)}`,
+    },
     body: JSON.stringify(input),
   });
   return data.squad;
