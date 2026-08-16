@@ -268,6 +268,16 @@ export class AiChatService {
       );
       const run = this.database.createAiChatRun({ threadId });
       this.#emit(threadId, { type: "ai.run", run });
+      if (thread.origin?.issueId) {
+        try {
+          this.database.setTaskExecutionState(thread.origin.issueId, "running", {
+            type: "agent",
+            id: "codex-agent",
+            name: "Codex Agent",
+            avatarUrl: null,
+          });
+        } catch {}
+      }
       const userEventData = {};
       if (skillIds.length > 0) userEventData.skillIds = skillIds;
       if (attachments.length > 0) {
@@ -569,6 +579,19 @@ export class AiChatService {
         finishedAt: new Date().toISOString(),
       });
       this.#emit(run.threadId, { type: "ai.run", run: updated });
+      const taskThread = this.database.getAiChatThread(run.threadId);
+      const boundIssueId = taskThread?.origin?.issueId;
+      if (boundIssueId) {
+        const terminalState = status === "completed" ? "completed" : status === "failed" ? "failed" : "interrupted";
+        try {
+          this.database.setTaskExecutionState(boundIssueId, terminalState, {
+            type: "agent",
+            id: "codex-agent",
+            name: "Codex Agent",
+            avatarUrl: null,
+          });
+        } catch {}
+      }
       return updated;
     } finally {
       this.active.delete(run.id);

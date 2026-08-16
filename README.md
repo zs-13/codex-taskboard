@@ -414,6 +414,9 @@ how to avoid them:
 | `CODEX_TASKBOARD_PORT` | `47823` | Local HTTP port |
 | `CODEX_TASKBOARD_DATA_DIR` | `.data` | SQLite data directory |
 | `CODEX_TASKBOARD_URL` | `http://127.0.0.1:47823` | CLI API origin |
+| `CODEX_TASKBOARD_AUTO_EXECUTE` | `1` | When a task is claimed by an agent (or assigned to a specific agent), automatically start a headless Codex turn so the task actually executes without opening a conversation. Set `0` to fall back to manual "open in conversation". A per-task `autoExecute` flag (create/edit) overrides the global default for that task. |
+
+When auto-execution is on, a claimed task transitions through `executionState` (`claimed` → `running` → `completed`/`failed`/`interrupted`). The task card and detail panel show that state, and the headless agent streams progress comments into the task without you opening a conversation.
 
 `npm start` prints both the local URL and the available LAN URLs. Teammates on the same trusted network can open one of those LAN URLs and use the same taskboard service. Task, comment, and attachment changes are broadcast to every open client through server-sent events; reconnecting clients perform a full refresh so changes made while disconnected are not missed. A teammate using `taskctl` can point it at the shared service with `CODEX_TASKBOARD_URL=http://<host-ip>:47823`.
 

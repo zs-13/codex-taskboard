@@ -136,16 +136,20 @@ export async function runAgentRunnerOnce(options = {}) {
       }
 
       const { task: claimed } = await claim(baseUrl, task, task.assignedAgentId ?? null, ownerSessionId, ttlSeconds);
+      const autoExecute = claimed.autoExecute ?? (process.env.CODEX_TASKBOARD_AUTO_EXECUTE ?? "1") !== "0";
       await comment(
         baseUrl,
         claimed.id,
-        `@${claimed.assignedAgentId} 自动认领成功：已进入执行中，后续会在这里同步进度、阻塞和自查结果。`,
+        autoExecute
+          ? `@${claimed.assignedAgentId} 自动认领成功：已自动开始执行，进度评论会实时出现在这里。`
+          : `@${claimed.assignedAgentId} 自动认领成功：已进入待执行状态，可在「在对话中打开」手动开始。`,
       );
       actions.push({
         type: "agent-claimed",
         taskId: claimed.id,
         identifier: claimed.identifier,
         agentId: claimed.assignedAgentId,
+        autoExecute,
       });
       claimedCount += 1;
     } catch (error) {

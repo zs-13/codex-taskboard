@@ -293,6 +293,8 @@ function taskFromRow(row) {
     lockExpiresAt: row.lock_expires_at ?? null,
     idempotencyKey: row.idempotency_key ?? null,
     lastAutonomousAt: row.last_autonomous_at ?? null,
+    executionState: row.execution_state ?? "idle",
+    autoExecute: row.auto_execute === null ? null : Boolean(row.auto_execute),
     source: row.external_source === "jira" ? "jira" : "local",
     externalOrigin: row.external_origin ?? null,
     externalKey: row.external_key ?? null,
@@ -707,6 +709,12 @@ export class TaskboardDatabase {
     }
     if (!migratedTaskColumns.some((column) => column.name === "external_url")) {
       this.database.exec("ALTER TABLE tasks ADD COLUMN external_url TEXT");
+    }
+    if (!migratedTaskColumns.some((column) => column.name === "execution_state")) {
+      this.database.exec("ALTER TABLE tasks ADD COLUMN execution_state TEXT NOT NULL DEFAULT 'idle'");
+    }
+    if (!migratedTaskColumns.some((column) => column.name === "auto_execute")) {
+      this.database.exec("ALTER TABLE tasks ADD COLUMN auto_execute INTEGER");
     }
     this.database.exec(`
       DROP INDEX IF EXISTS tasks_external_source_id;
@@ -1637,6 +1645,14 @@ export class TaskboardDatabase {
     return row ? this.#aiChatThreadWithCurrentRun(row) : null;
   }
 
+  listAiChatThreadsForIssue(issueId) {
+    return this.database.prepare(`
+      SELECT * FROM ai_chat_threads
+      WHERE origin_issue_id = ?
+      ORDER BY updated_at DESC, id DESC
+    `).all(issueId).map((row) => this.#aiChatThreadWithCurrentRun(row));
+  }
+
   hasAiChatThreadProjectConflict(issueRef, projectId) {
     return Boolean(this.database.prepare(`
       SELECT 1
@@ -1991,8 +2007,9 @@ export class TaskboardDatabase {
           assigned_agent_id, squad_id,
           workflow_id, git_branch, worktree_path, worktree_branch,
           start_date, due_date, recurrence_interval, recurrence_unit,
+          execution_state, auto_execute,
           archived_at, version, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, NULL, 1, ?, ?)
       `).run(
         id,
         identifier,
@@ -2022,6 +2039,7 @@ export class TaskboardDatabase {
         input.dueDate,
         input.recurrence?.interval ?? null,
         input.recurrence?.unit ?? null,
+        input.autoExecute === undefined || input.autoExecute === null ? null : (input.autoExecute ? 1 : 0),
         timestamp,
         timestamp,
       );
@@ -2124,6 +2142,11 @@ export class TaskboardDatabase {
         // Setting the owning squad clears the executing agent (one-or-the-other).
         assignments.push("squad_id = ?", "assigned_agent_id = ?");
         values.push(value ?? null, null);
+        continue;
+      }
+      if (key === "autoExecute") {
+        assignments.push("auto_execute = ?");
+        values.push(value === null || value === undefined ? null : (value ? 1 : 0));
         continue;
       }
       assignments.push(`${columns[key]} = ?`);
@@ -2996,7 +3019,7 @@ export class TaskboardDatabase {
       const result = this.database.prepare(`
         UPDATE tasks
         SET assigned_agent_id = ?, status = CASE WHEN status IN ('backlog', 'todo') THEN 'in_progress' ELSE status END,
-          lock_owner = ?, lock_expires_at = ?, last_autonomous_at = ?, version = version + 1, updated_at = ?
+          lock_owner = ?, lock_expires_at = ?, last_autonomous_at = ?, execution_state = 'claimed', version = version + 1, updated_at = ?
         WHERE id = ? AND version = ?
       `).run(selectedAgent.id, selectedAgent.id, input.expiresAt, timestamp, timestamp, task.id, task.version);
       if (result.changes !== 1) this.#throwMissingOrConflict(task.id, task.version);
@@ -3048,6 +3071,33 @@ export class TaskboardDatabase {
       payload: { agentId: selectedAgent.id, ownerSessionId: input.ownerSessionId },
     });
     return updated;
+  }
+
+  setTaskExecutionState(taskId, state, actor) {
+    const task = this.#requireTask(taskId);
+    const timestamp = now();
+    // Execution state is operational bookkeeping, not a user-editable field; do
+    // not bump version so the executing agent's own --if-version moves win.
+    this.database.prepare(`
+      UPDATE tasks
+      SET execution_state = ?, updated_at = ?
+      WHERE id = ?
+    `).run(state, timestamp, task.id);
+    const resolvedActor = actor ?? { type: "system", id: "system", name: "System", avatarUrl: null };
+    this.#recordTaskActivity(task.id, resolvedActor, [{
+      field: "executionState",
+      before: task.executionState ?? "idle",
+      after: state,
+    }], timestamp);
+    this.recordActivity({
+      projectId: task.projectId,
+      taskId: task.id,
+      actor: resolvedActor,
+      eventType: "task.execution_state",
+      message: `Task ${task.identifier} execution ${state}`,
+      payload: { state },
+    });
+    return this.getTask(task.id);
   }
 
   addTaskDependency(taskId, dependsOnTaskId, actor) {

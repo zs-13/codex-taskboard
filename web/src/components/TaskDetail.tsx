@@ -34,6 +34,7 @@ import type {
   Task,
   TaskChangeActivity,
   TaskDraft,
+  TaskExecutionState,
   TaskPriority,
   TaskRelationSummary,
   TaskStatus,
@@ -46,7 +47,7 @@ import {
 import { ActorAvatar } from "./ActorAvatar";
 import { STATUS_DETAILS, StatusIcon } from "./BoardColumn";
 import { LabelPicker } from "./LabelPicker";
-import { LinearIcon, LinearPriorityIcon } from "./LinearIcon";
+import { LinearIcon, LinearPriorityIcon, type LinearIconName } from "./LinearIcon";
 import { TaskboardIcon } from "./TaskboardIcon";
 import {
   fileKey,
@@ -211,8 +212,34 @@ const ACTIVITY_FIELD_LABELS: Record<string, readonly [string, string]> = {
   dueDate: ["截止日期", "due date"],
   recurrence: ["重复", "recurrence"],
   archivedAt: ["归档状态", "archive status"],
+  executionState: ["执行状态", "execution state"],
   relation: ["关系", "relation"],
 };
+
+function executionStateIcon(state: TaskExecutionState): LinearIconName {
+  switch (state) {
+    case "claimed": return "statusStarted";
+    case "running": return "play";
+    case "completed": return "check";
+    case "failed": return "alert";
+    case "interrupted": return "pause";
+    default: return "statusTodo";
+  }
+}
+
+function executionStateLabel(
+  state: TaskExecutionState,
+  text: (chinese: string, english: string) => string,
+) {
+  switch (state) {
+    case "claimed": return text("已认领未执行", "Claimed");
+    case "running": return text("执行中", "Running");
+    case "completed": return text("已完成", "Completed");
+    case "failed": return text("执行失败", "Failed");
+    case "interrupted": return text("已中断", "Interrupted");
+    default: return text("待执行", "Idle");
+  }
+}
 
 const RELATION_LABELS: Record<IssueRelationType, readonly [string, string]> = {
   parent: ["父议题", "Parent issue"],
@@ -1634,6 +1661,17 @@ export function TaskDetail({
                 </optgroup>
               </select>
             </label>
+            {(currentTask.executionState && currentTask.executionState !== "idle") && (
+              <div className={`detail-property-row execution-state-property is-execution-${currentTask.executionState}`}>
+                <span className="detail-property-icon" aria-hidden="true">
+                  <LinearIcon name={executionStateIcon(currentTask.executionState)} />
+                </span>
+                <span className="detail-property-label">{text("执行状态", "Execution")}</span>
+                <span className="detail-execution-state-value">
+                  {executionStateLabel(currentTask.executionState, text)}
+                </span>
+              </div>
+            )}
             <label className="detail-property-row">
               <span className="detail-property-icon" aria-hidden="true"><LinearIcon name="calendar" /></span>
               <span className="detail-property-label">{text("开始日期", "Start date")}</span>

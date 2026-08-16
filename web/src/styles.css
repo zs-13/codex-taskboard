@@ -12347,6 +12347,48 @@ kbd {
   color: var(--priority-urgent);
 }
 
+.task-exec-badge.is-execution-claimed {
+  border-color: color-mix(in srgb, var(--status-progress) 35%, var(--border-subtle));
+  color: var(--status-progress);
+}
+
+.task-exec-badge.is-execution-running {
+  border-color: color-mix(in srgb, var(--status-review) 45%, var(--border-subtle));
+  color: var(--status-review);
+}
+
+.task-exec-badge.is-execution-completed {
+  border-color: color-mix(in srgb, var(--status-done) 40%, var(--border-subtle));
+  color: var(--status-done);
+}
+
+.task-exec-badge.is-execution-failed,
+.task-exec-badge.is-execution-interrupted {
+  border-color: color-mix(in srgb, var(--status-blocked) 42%, var(--border-subtle));
+  color: var(--status-blocked);
+}
+
+.detail-property-row.execution-state-property.is-execution-running .detail-execution-state-value {
+  color: var(--status-review);
+}
+
+.detail-property-row.execution-state-property.is-execution-completed .detail-execution-state-value {
+  color: var(--status-done);
+}
+
+.detail-property-row.execution-state-property.is-execution-failed .detail-execution-state-value,
+.detail-property-row.execution-state-property.is-execution-interrupted .detail-execution-state-value {
+  color: var(--status-blocked);
+}
+
+.detail-execution-state-value {
+  color: var(--text-secondary);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 1100px) {
   .collab-panel-body {
     grid-template-columns: repeat(2, minmax(220px, 1fr));
