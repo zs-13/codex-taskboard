@@ -233,3 +233,55 @@ test("assigning a task to an agent triggers auto-execution when enabled", async 
     await fixture.close();
   }
 });
+test("auto-execute reuses a healthy completed thread and does not duplicate threads", async () => {
+  const fixture = await createServerFixture();
+  try {
+    await request(fixture.baseUrl, "/api/agents", {
+      method: "POST",
+      body: { id: "builder", name: "Builder", skills: ["frontend"], workspacePath: null },
+    });
+    const created = await request(fixture.baseUrl, "/api/tasks", {
+      method: "POST",
+      body: {
+        projectId: "local",
+        title: "Reuse healthy thread",
+        status: "todo",
+        priority: "medium",
+        labels: ["frontend"],
+      },
+    });
+    const taskId = created.body.task.id;
+
+    // First claim auto-executes and completes (fixture codex always completes).
+    await request(fixture.baseUrl, `/api/tasks/${taskId}/claim`, {
+      method: "POST",
+      body: { agentId: "builder", ownerSessionId: "auto-execute-test", ttlSeconds: 900 },
+    });
+    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
+    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "completed" || task.executionState === "failed");
+
+    const threads = await request(fixture.baseUrl, "/api/local/ai/threads");
+    const taskThreads = threads.body.threads.filter((thread) => thread.origin.issueId === taskId);
+    assert.ok(taskThreads.length > 0, "a thread should exist after the first execution");
+
+    // Re-claim and auto-execute again: must reuse the existing thread (no new one).
+    const before = await request(fixture.baseUrl, `/api/tasks/${taskId}`);
+    await request(fixture.baseUrl, `/api/tasks/${taskId}`, {
+      method: "PATCH",
+      body: { version: before.body.task.version, status: "todo" },
+    });
+    await request(fixture.baseUrl, `/api/tasks/${taskId}/claim`, {
+      method: "POST",
+      body: { agentId: "builder", ownerSessionId: "auto-execute-retry", ttlSeconds: 900 },
+    });
+    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
+
+    const afterThreads = await request(fixture.baseUrl, "/api/local/ai/threads");
+    const afterTaskThreads = afterThreads.body.threads.filter((thread) => thread.origin.issueId === taskId);
+    const runningNow = afterTaskThreads.filter((thread) => thread.status === "running" && thread.currentRun);
+    assert.equal(runningNow.length, 1, "exactly one running thread after re-execution");
+    assert.equal(runningNow[0].id, taskThreads[0].id, "re-execution must reuse the existing thread");
+  } finally {
+    await fixture.close();
+  }
+});

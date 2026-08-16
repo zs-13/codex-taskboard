@@ -1931,7 +1931,12 @@ export function createTaskboardServer(options = {}) {
     if (activeThread) {
       return { started: false, reason: "already-running", thread: activeThread };
     }
-    const thread = existingThreads[0] ?? await aiChat.createThread({
+    // Only reuse a healthy idle thread; a failed thread would resume a dead
+    // Codex session and fail immediately, so start a fresh one instead.
+    const reusable = existingThreads.find((candidate) => (
+      candidate.status === "idle" && !candidate.currentRun
+    ));
+    const thread = reusable ?? await aiChat.createThread({
       projectId: task.projectId,
       issueId: task.id,
       title: task.title,
