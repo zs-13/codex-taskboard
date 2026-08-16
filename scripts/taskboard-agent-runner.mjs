@@ -24,7 +24,11 @@ function normalizeBaseUrl(value) {
 
 async function readRuntimeUrl(runtimeFile) {
   try {
-    const descriptor = JSON.parse(await readFile(runtimeFile, "utf8"));
+    const raw = await readFile(runtimeFile, "utf8");
+    // PowerShell 5.1 Set-Content -Encoding UTF8 writes a BOM; JSON.parse
+    // chokes on it, so strip it before parsing.
+    const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
+    const descriptor = JSON.parse(text);
     return typeof descriptor.url === "string" ? descriptor.url : null;
   } catch {
     return null;

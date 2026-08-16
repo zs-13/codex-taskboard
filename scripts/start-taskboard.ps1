@@ -212,7 +212,9 @@ $runningBaseUrl = Get-RunningTaskboardBaseUrl
 if ($runningBaseUrl) {
   Write-Host "Taskboard instance already running at $runningBaseUrl - reusing it."
   $runtimeJson = @{ version = 1; pid = $PID; url = $runningBaseUrl } | ConvertTo-Json -Compress
-  Set-Content -Path $runtimeFile -Value $runtimeJson -Encoding UTF8
+  # Set-Content -Encoding UTF8 writes a BOM in Windows PowerShell 5.1, which
+  # breaks JSON.parse in the agent runner; write UTF-8 without a BOM instead.
+  [System.IO.File]::WriteAllText($runtimeFile, $runtimeJson, (New-Object System.Text.UTF8Encoding($false)))
   $runtimeReady = $true
 }
 
