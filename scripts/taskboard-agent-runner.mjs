@@ -85,12 +85,16 @@ function isClaimable(task) {
 
 // A task that was pre-claimed or marked running/completed but whose lock has
 // expired and has no active turn is orphaned (fake execution). Reset it to the
-// claimable pool so the executor can claim it for real.
+// claimable pool so the executor can claim it for real. A task bound to a
+// conversation (`threadId` set) is being/has been legitimately executed by a
+// headless turn and must not be touched — such turns claim via `taskctl move`,
+// which sets the thread binding but not a task lock.
 function isStuck(task) {
   if (!task || task.archivedAt != null || task.blocked === true) return false;
   if (task.controlStatus === "paused" || task.controlStatus === "terminated") return false;
   if (task.status !== "todo" && task.status !== "in_progress") return false;
   if (task.executionState === "idle") return false;
+  if (task.threadId || task.threadBinding) return false;
   if (task.lockOwner && task.lockExpiresAt) {
     if (new Date(task.lockExpiresAt).getTime() > Date.now()) return false;
   }
