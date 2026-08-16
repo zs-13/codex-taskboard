@@ -248,7 +248,9 @@ test("Codex turns use stdin, explicit resume ids, server-owned cwd and sanitized
       "-c", 'approval_policy="on-request"',
       "-c", 'approvals_reviewer="auto_review"',
       "--add-dir", fixture.otherWorkspace,
-      "-m", "gpt-real",
+      // A resume must not pin `-m` to the thread's stored model: Codex refuses
+      // to resume a session recorded under a different model, so it is omitted
+      // and the session's own recorded model is used.
       "-c", 'model_reasoning_effort="high"',
       "resume", "codex-thread-1", "-",
     ]);
@@ -267,6 +269,37 @@ test("Codex turns use stdin, explicit resume ids, server-owned cwd and sanitized
     );
     assert.equal(persisted.includes("<taskboard_context>"), false);
     assert.equal(persisted.includes("SECRET REASONING"), false);
+  } finally {
+    await fixture.close();
+  }
+});
+
+test("resuming tolerates a stored model that drifted from the Codex session", async () => {
+  const fixture = await createFixture();
+  try {
+    const thread = await fixture.service.createThread({
+      projectId: "project",
+      model: "gpt-real",
+    });
+    const first = await fixture.service.startTurn(thread.id, { message: "first" });
+    await waitFor(() => fixture.service.getRun(first.id)?.status !== "running");
+    assert.equal(fixture.service.getThread(thread.id).codexThreadId, "codex-thread-1");
+
+    // Simulate a model changed after the session was created: the stored model
+    // no longer matches the model the Codex session was recorded with.
+    fixture.database.updateAiChatThread(thread.id, { model: "gpt-unknown" });
+
+    // Resuming must not fail on the stale model, and must not pin `-m` to it.
+    const second = await fixture.service.startTurn(thread.id, { message: "second" });
+    await waitFor(() => fixture.service.getRun(second.id)?.status !== "running");
+    assert.equal(fixture.service.getRun(second.id).status, "completed");
+
+    const captures = (await readFile(fixture.capturePath, "utf8"))
+      .trim().split("\n").map(JSON.parse);
+    const resumeArgs = captures[1].args;
+    assert.ok(resumeArgs.includes("resume"));
+    assert.equal(resumeArgs.includes("-m"), false, "resume must not pass -m");
+    assert.equal(resumeArgs.includes("gpt-unknown"), false);
   } finally {
     await fixture.close();
   }

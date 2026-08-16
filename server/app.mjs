@@ -1924,6 +1924,17 @@ export function createTaskboardServer(options = {}) {
     return String(process.env.CODEX_TASKBOARD_AUTO_EXECUTE ?? "1") !== "0";
   }
 
+  // Cap consecutive failed auto-execute turns per task so the runner does not
+  // re-trigger a task that keeps failing every poll cycle (comment spam and a
+  // board that looks "stuck"). After the cap the task is left for manual
+  // execution; a successful turn clears the counter. In-memory only: a server
+  // restart resets it, which is a reasonable best-effort bound.
+  const configuredMaxRetries = Number(process.env.CODEX_TASKBOARD_AUTO_EXECUTE_MAX_RETRIES ?? 2);
+  const autoExecuteMaxRetries = Number.isFinite(configuredMaxRetries) && configuredMaxRetries > 0
+    ? Math.floor(configuredMaxRetries)
+    : 2;
+  const autoExecuteFailures = new Map();
+
   async function autoExecuteTask(task) {
     if (!task || task.archivedAt != null) {
       return { started: false, reason: "not-found" };
@@ -1933,6 +1944,9 @@ export function createTaskboardServer(options = {}) {
     }
     if (!autoExecuteEnabledForTask(task)) {
       return { started: false, reason: "auto-execute-disabled" };
+    }
+    if ((autoExecuteFailures.get(task.id) ?? 0) >= autoExecuteMaxRetries) {
+      return { started: false, reason: "auto-execute-stopped" };
     }
     const existingThreads = database.listAiChatThreadsForIssue(task.id);
     const activeThread = existingThreads.find((candidate) => candidate.currentRun);
@@ -1951,7 +1965,14 @@ export function createTaskboardServer(options = {}) {
     });
     const run = await aiChat.startTurn(thread.id, {
       message: `e-taskboard 处理任务面板任务 ${task.identifier}，并同步进度状态。你是该任务的自动执行者：若任务仍为 todo 且未被其他会话绑定，请先按 manage-taskboard 流程认领（移到 in_progress）再实际实现并产出结果；即使任务已指派给某个 agent，那也是由你（无头自动回合）代表执行，不要因指派而拒绝动手。`,
-    });
+    }, { autoExecute: true });
+    void aiChat.waitForRun(run.id).then((finished) => {
+      if (finished?.status === "completed") {
+        autoExecuteFailures.delete(task.id);
+      } else if (finished?.status === "failed") {
+        autoExecuteFailures.set(task.id, (autoExecuteFailures.get(task.id) ?? 0) + 1);
+      }
+    }).catch(() => {});
     return { started: true, thread, run };
   }
 

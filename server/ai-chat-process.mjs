@@ -197,7 +197,13 @@ export function buildCodexArgs(thread, addDirectories, imagePaths = []) {
   for (const directory of addDirectories) {
     args.push("--add-dir", directory);
   }
-  if (thread.model) {
+  // When resuming an existing Codex session the model must match what that
+  // session was recorded with — Codex refuses to resume a session under a
+  // different model ("This session was recorded with X but is resuming with
+  // Y"). The thread's stored model can drift from the session's (e.g. after a
+  // model update), so leave `-m` off on resume and let Codex use the model it
+  // recorded for the session. A fresh session uses the thread's model.
+  if (thread.model && !thread.codexThreadId) {
     args.push("-m", thread.model);
   }
   if (thread.reasoningEffort) {
@@ -343,6 +349,12 @@ export function spawnCodexTurn({
 }) {
   const child = spawn(process.execPath, [TURN_OWNER_PATH, executable, JSON.stringify(args)], {
     detached: true,
+    // On Windows `detached: true` would otherwise create a brand-new console
+    // window for every headless turn, and that console can receive Ctrl+C /
+    // close events that terminate the turn mid-run (exit 0xC000013A). Hiding
+    // the window keeps headless execution invisible and out of the console's
+    // signal path. No-op on POSIX.
+    windowsHide: true,
     env: withoutTaskboardLauncherEnvironment(env),
     stdio: ["pipe", "pipe", "pipe", "pipe"],
   });
