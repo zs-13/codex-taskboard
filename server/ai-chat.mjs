@@ -270,7 +270,16 @@ export class AiChatService {
       this.#emit(threadId, { type: "ai.run", run });
       if (thread.origin?.issueId) {
         try {
-          this.database.setTaskExecutionState(thread.origin.issueId, "running", {
+          // A turn that started on an unclaimed (todo) task must not mark it
+          // "running" — the headless agent would read the task as being executed
+          // by another session and refuse to claim it. Only a task already
+          // claimed (in_progress) is actually running.
+          let state = "running";
+          try {
+            const task = this.database.getTask(thread.origin.issueId);
+            if (task && task.status === "todo") state = "claimed";
+          } catch {}
+          this.database.setTaskExecutionState(thread.origin.issueId, state, {
             type: "agent",
             id: "codex-agent",
             name: "Codex Agent",

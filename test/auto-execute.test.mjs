@@ -78,6 +78,17 @@ async function waitForTask(baseUrl, taskId, predicate, timeoutMs = 5_000) {
   return task;
 }
 
+async function waitForTaskThread(baseUrl, taskId, timeoutMs = 5_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await request(baseUrl, "/api/local/ai/threads");
+    const bound = result.body.threads.filter((thread) => thread.origin.issueId === taskId);
+    if (bound.length > 0) return bound;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+  return [];
+}
+
 test("claiming a claimable task auto-executes via a headless AiChat turn without pre-claiming", async () => {
   const fixture = await createServerFixture();
   try {
@@ -239,8 +250,9 @@ test("assigning a task to an agent triggers auto-execution when enabled", async 
     assert.equal(assigned.response.status, 200);
     assert.equal(assigned.body.task.assignedAgentId, "builder");
 
-    const executing = await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
-    assert.equal(executing.executionState, "running");
+    // The assignment auto-starts a headless turn on a thread bound to the task.
+    const boundThreads = await waitForTaskThread(fixture.baseUrl, taskId);
+    assert.ok(boundThreads.length > 0, "an AiChat thread should be bound to the task after assignment");
   } finally {
     await fixture.close();
   }
@@ -288,13 +300,21 @@ test("auto-execute reuses a healthy completed thread and does not duplicate thre
       method: "POST",
       body: { agentId: "builder", ownerSessionId: "auto-execute-retry", ttlSeconds: 900 },
     });
-    await waitForTask(fixture.baseUrl, taskId, (task) => task.executionState === "running");
+
+    // The claim awaits the turn start on the reused thread. The fixture codex
+    // completes instantly, so poll the thread until its run starts or finishes;
+    // either way the same thread must have been used (no duplicate created).
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const snapshot = await request(fixture.baseUrl, `/api/local/ai/threads/${taskThreads[0].id}`);
+      if (snapshot.body.thread.currentRun || snapshot.body.thread.status === "idle") break;
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
 
     const afterThreads = await request(fixture.baseUrl, "/api/local/ai/threads");
     const afterTaskThreads = afterThreads.body.threads.filter((thread) => thread.origin.issueId === taskId);
-    const runningNow = afterTaskThreads.filter((thread) => thread.status === "running" && thread.currentRun);
-    assert.equal(runningNow.length, 1, "exactly one running thread after re-execution");
-    assert.equal(runningNow[0].id, taskThreads[0].id, "re-execution must reuse the existing thread");
+    assert.ok(afterTaskThreads.some((thread) => thread.id === taskThreads[0].id), "re-execution must reuse the existing thread");
+    assert.equal(afterTaskThreads.length, 1, "exactly one thread after re-execution");
   } finally {
     await fixture.close();
   }

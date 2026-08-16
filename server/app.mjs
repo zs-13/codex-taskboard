@@ -1950,7 +1950,7 @@ export function createTaskboardServer(options = {}) {
       title: task.title,
     });
     const run = await aiChat.startTurn(thread.id, {
-      message: `e-taskboard 处理任务面板任务 ${task.identifier}，并同步进度状态。`,
+      message: `e-taskboard 处理任务面板任务 ${task.identifier}，并同步进度状态。你是该任务的自动执行者：若任务仍为 todo 且未被其他会话绑定，请先按 manage-taskboard 流程认领（移到 in_progress）再实际实现并产出结果；即使任务已指派给某个 agent，那也是由你（无头自动回合）代表执行，不要因指派而拒绝动手。`,
     });
     return { started: true, thread, run };
   }
