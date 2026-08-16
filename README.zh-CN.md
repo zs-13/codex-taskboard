@@ -298,6 +298,8 @@ npm run codex:inject -- --port 9229 --open
 
 5. **Windows 一键设置（可选）。** 运行 `scripts\setup-taskboard-autostart.ps1` 会创建「Codex Taskboard」桌面快捷方式（固定端口启动器）并注册常驻注入器的开机自启，安装后双击即可打开面板，重启电脑也能自动就绪。
 
+6. **任务管理器里出现十几个 `ChatGPT.exe`/`codex` 是正常的。** Codex 桌面应用基于 Chromium，一个窗口会拆成多个系统进程：主浏览器进程 + GPU、网络、存储、崩溃上报（crashpad）、以及每个标签页/面板一个渲染进程。它们共用同一个进程名，所以单个 Codex 窗口在任务管理器里会显示为 10+ 条。判断「是不是只开了一个」看主进程：只有一个**不带 `--type=`**（且带 `--user-data-dir=` 和 `--remote-debugging-port=`）的 `ChatGPT.exe` 就只有一个窗口。启动器还会在后台常驻几个 `node.exe`（服务、注入器、agent runner），这是有意设计——关掉 Codex 后任务进度和历史仍持续更新。
+
 ## 配置
 
 | 变量 | 默认值 | 用途 |

@@ -329,6 +329,16 @@ how to avoid them:
    a logon autostart for the resident injector, so the panel is one click away
    after install and survives reboots.
 
+6. **Many `ChatGPT.exe` / `codex` entries in Task Manager is normal.** The Codex
+   desktop app is built on Chromium, and a single window runs as a main browser
+   process plus several helpers — GPU, network, storage, crash reporter, and one
+   renderer per tab/panel. They all share the app name, so one Codex window shows
+   up as 10+ entries in Task Manager. You have exactly one window when exactly one
+   `ChatGPT.exe` carries the launcher flags *without* a `--type=` child-process
+   marker (the main process: `--user-data-dir=... --remote-debugging-port=...`).
+   The launcher additionally keeps a small set of `node.exe` background services
+   (service, injector, agent runner) alive on purpose.
+
 ## Configuration
 
 | Variable | Default | Purpose |
