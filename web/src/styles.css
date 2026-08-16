@@ -6756,6 +6756,25 @@ kbd {
 .task-property-option.priority-low .task-property-option-icon { color: var(--priority-low); }
 .task-property-option.priority-none .task-property-option-icon { color: var(--priority-none); }
 
+.task-property-group-label {
+  padding: 6px 8px 2px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.task-property-option.is-unknown .task-property-option-label {
+  font-style: italic;
+  opacity: .7;
+}
+
+.task-property-option.is-unknown .task-property-option-icon {
+  opacity: .6;
+}
+
 .label-popover > input {
   width: 100%;
   height: 40px;

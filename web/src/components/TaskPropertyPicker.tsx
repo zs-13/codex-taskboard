@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -15,6 +16,8 @@ export interface TaskPropertyOption<Value extends string> {
   label: string;
   icon: ReactNode;
   className?: string;
+  /** Renders a group header above this option when it differs from the previous option's group. */
+  groupLabel?: string;
 }
 
 interface TaskPropertyPickerProps<Value extends string> {
@@ -160,24 +163,32 @@ export function TaskPropertyPicker<Value extends string>({
       onBlur={closeFromFocusLeave}
     >
       <div className="task-property-options">
-        {options.map((option, index) => (
-          <button
-            type="button"
-            role="option"
-            aria-selected={option.value === value}
-            tabIndex={index === focusedIndex ? 0 : -1}
-            className={`task-property-option${option.className ? ` ${option.className}` : ""}`}
-            key={option.value}
-            onClick={() => selectOption(option)}
-            onFocus={() => setFocusedIndex(index)}
-          >
-            <span className="task-property-option-icon">{option.icon}</span>
-            <span className="task-property-option-label">{option.label}</span>
-            {option.value === value && (
-              <span className="task-property-option-check"><LinearIcon name="check" /></span>
-            )}
-          </button>
-        ))}
+        {options.map((option, index) => {
+          const previousGroup = index > 0 ? options[index - 1].groupLabel : undefined;
+          const showGroup = Boolean(option.groupLabel) && option.groupLabel !== previousGroup;
+          return (
+            <Fragment key={option.value}>
+              {showGroup && (
+                <div className="task-property-group-label" role="presentation">{option.groupLabel}</div>
+              )}
+              <button
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                tabIndex={index === focusedIndex ? 0 : -1}
+                className={`task-property-option${option.className ? ` ${option.className}` : ""}`}
+                onClick={() => selectOption(option)}
+                onFocus={() => setFocusedIndex(index)}
+              >
+                <span className="task-property-option-icon">{option.icon}</span>
+                <span className="task-property-option-label">{option.label}</span>
+                {option.value === value && (
+                  <span className="task-property-option-check"><LinearIcon name="check" /></span>
+                )}
+              </button>
+            </Fragment>
+          );
+        })}
       </div>
     </div>,
     portalTarget,
