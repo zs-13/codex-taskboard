@@ -220,6 +220,40 @@ test("issue create reads a description file and parses labels", async () => {
   });
 });
 
+test("issue create passes non-ASCII (Chinese) title and description-file through UTF-8 intact", async () => {
+  const title = "阻塞于 LOCAL-25 · 已完成自动化测试（Mika）";
+  const description = "验收标准：中文描述与正文必须原样保留，不允许出现 U+FFFD 乱码。";
+  let requestBody;
+  let requestBodyText;
+  const result = await run(
+    [
+      "issue",
+      "create",
+      "--project",
+      "local",
+      "--title",
+      title,
+      "--description-file",
+      "issue-zh.md",
+    ],
+    async (_url, init) => {
+      requestBodyText = init.body;
+      requestBody = JSON.parse(requestBodyText);
+      return response({ task: { id: "TASK-1", ...requestBody, version: 1 } }, 201);
+    },
+    { readFile: async () => description },
+  );
+
+  assert.equal(result.exitCode, 0);
+  assert.equal(requestBody.title, title);
+  assert.equal(requestBody.description, description);
+  // The UTF-8 payload must contain the original code points, never U+FFFD.
+  assert.ok(!title.includes("�"));
+  assert.ok(!description.includes("�"));
+  assert.ok(requestBodyText.includes(title));
+  assert.ok(requestBodyText.includes(description));
+});
+
 test("issue update sends an explicit optimistic concurrency version", async () => {
   const calls = [];
   const result = await run(
