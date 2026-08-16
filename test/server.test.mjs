@@ -111,6 +111,10 @@ test("launcher mode proves service identity and hides every route behind its ins
     health.body.proof,
     createHmac("sha256", instanceSecret).update(challenge).digest("hex"),
   );
+  // Loopback launchers must be able to discover the live instance's base URL so
+  // a second installation (e.g. the Codex plugin copy) can reuse it instead of
+  // starting a conflicting service with a fresh random token.
+  assert.equal(health.body.baseUrl, `${baseUrl}/${encodeURIComponent(instanceToken)}`);
 
   const publicApi = await request(baseUrl, "/api/projects");
   assert.equal(publicApi.response.status, 404);

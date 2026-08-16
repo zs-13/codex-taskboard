@@ -250,7 +250,25 @@ test("a completed web build refreshes an already-open Codex iframe", () => {
 });
 
 test("the injected iframe follows the configured local service port", () => {
-  assert.match(source, /const taskboardBaseUrl = `\$\{taskboardOrigin\}\/\$\{encodeURIComponent\(taskboardInstanceToken\)\}`/);
-  assert.match(source, /const taskboardPageUrl = `\$\{taskboardBaseUrl\}\/\?host=codex`/);
+  assert.match(source, /let taskboardBaseUrl = `\$\{taskboardOrigin\}\/\$\{encodeURIComponent\(taskboardInstanceToken\)\}`/);
+  assert.match(source, /let taskboardPageUrl = `\$\{taskboardBaseUrl\}\/\?host=codex`/);
   assert.match(source, /window\.__CODEX_TASKBOARD_URL__ = \$\{JSON\.stringify\(taskboardPageUrl\)\}/);
+});
+
+test("the injector reuses an already-running taskboard instance instead of starting a conflicting service", () => {
+  assert.match(source, /let adoptedInstanceBaseUrl = null/);
+  assert.match(source, /async function discoverRunningTaskboardBaseUrl/);
+  assert.match(source, /body\?\.product !== "codex-taskboard"/);
+  assert.match(source, /typeof body\.baseUrl !== "string"/);
+  assert.match(source, /url\.origin !== taskboardOrigin/);
+  assert.match(source, /const runningBaseUrl = await discoverRunningTaskboardBaseUrl\(\)/);
+  assert.match(source, /adoptedInstanceBaseUrl = runningBaseUrl/);
+  assert.match(source, /taskboardPageUrl = `\$\{runningBaseUrl\}\/\?host=codex`/);
+  // The health probe is the generic discovery mechanism; the server now
+  // advertises baseUrl on loopback so launchers can find the live instance.
+  assert.match(source, /body\.baseUrl/);
+  assert.match(source, /if \(adoptedInstanceBaseUrl\)/);
+  // Frame verification must tolerate the adopted instance's different launcher
+  // secret, otherwise the injected panel would still fail identity checks.
+  assert.match(source, /if \(!adoptedInstanceBaseUrl && proof !== expectedProof\)/);
 });
